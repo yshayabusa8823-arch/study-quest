@@ -6,7 +6,7 @@ from pathlib import Path
 st.set_page_config(
     page_title="Study Quest",
     page_icon="icon.png",
-    layout="wide"
+    layout="centered"
 )
 
 DATA_DIR = Path("data")
@@ -169,41 +169,93 @@ def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
 
 st.markdown("""
 <style>
-.main {
-    background-color: #f4f6fb;
-}
 .block-container {
-    padding-top: 2rem;
+    padding-top: 1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    max-width: 760px;
 }
+
 .hero {
-    background: linear-gradient(135deg, #1e2a44, #5b6ee1);
-    padding: 30px;
-    border-radius: 26px;
+    background: linear-gradient(135deg, #111827, #4f46e5, #ec4899);
+    padding: 26px;
+    border-radius: 30px;
     color: white;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 18px 40px rgba(79,70,229,0.25);
 }
-.card {
-    background: white;
-    padding: 22px;
-    border-radius: 20px;
-    box-shadow: 0 5px 16px rgba(0,0,0,0.06);
-    margin-bottom: 15px;
+
+.hero h1 {
+    font-size: 42px;
+    line-height: 1.05;
+    margin-bottom: 14px;
 }
-.big-number {
-    font-size: 34px;
-    font-weight: 800;
+
+.hero h3 {
+    font-size: 24px;
+    line-height: 1.3;
 }
-.small-label {
-    color: #666;
-    font-size: 14px;
-}
-.badge-title {
-    font-weight: 700;
+
+.mission-card {
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    padding: 20px;
+    border-radius: 24px;
+    border: 1px solid #fed7aa;
+    margin-bottom: 18px;
     font-size: 18px;
 }
-.badge-desc {
-    color: #666;
+
+.stat-card {
+    background: white;
+    padding: 18px;
+    border-radius: 24px;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.08);
+    border: 1px solid #eef2f7;
+    margin-bottom: 12px;
+}
+
+.stat-label {
+    color: #64748b;
     font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.stat-number {
+    color: #111827;
+    font-size: 32px;
+    font-weight: 900;
+}
+
+.quest-card {
+    background: white;
+    padding: 20px;
+    border-radius: 26px;
+    box-shadow: 0 12px 32px rgba(15,23,42,0.10);
+    border: 1px solid #e5e7eb;
+    margin-bottom: 18px;
+}
+
+.badge-pill {
+    display: inline-block;
+    background: #f1f5f9;
+    padding: 10px 14px;
+    border-radius: 999px;
+    margin: 5px 4px;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.section-title {
+    font-size: 28px;
+    font-weight: 900;
+    margin-top: 24px;
+    margin-bottom: 12px;
+}
+
+div[data-testid="stMetric"] {
+    background: white;
+    padding: 16px;
+    border-radius: 18px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -229,7 +281,7 @@ default_subjects = [
 ]
 
 
-st.sidebar.title("🧭 Study Quest")
+st.sidebar.title("⚙️ 設定")
 
 user_id = st.sidebar.selectbox(
     "ユーザーを選択",
@@ -317,66 +369,85 @@ badges = get_badges(
 )
 
 
+if remaining == 0:
+    mission_text = "🎉 今週の目標達成！今日は復習か軽めの積み上げでOK。"
+elif streak == 0:
+    mission_text = "🔥 まずは30分だけ記録しよう。ゼロにしないのが勝ち。"
+elif achievement >= 70:
+    mission_text = "⚔️ あと少し。今日は1時間だけでも積めばかなり強い。"
+else:
+    mission_text = f"📚 今週の残りは {remaining:.1f}h。今日は1.0hを目標にしよう。"
+
+
 st.markdown(f"""
 <div class="hero">
-    <h1>🧭 Study Quest</h1>
+    <h1>🧭 Study<br>Quest</h1>
     <h3>{edit_name} の学習ダッシュボード</h3>
     <p>今日の積み上げが、未来の自分を作る。</p>
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown(f"""
+<div class="mission-card">
+    <b>今日のミッション</b><br>
+    {mission_text}
+</div>
+""", unsafe_allow_html=True)
 
-col1, col2, col3, col4, col5 = st.columns(5)
+
+col1, col2 = st.columns(2)
 
 with col1:
     st.markdown(f"""
-    <div class="card">
-        <div class="small-label">今週の勉強時間</div>
-        <div class="big-number">{weekly_total:.1f}h</div>
+    <div class="stat-card">
+        <div class="stat-label">今週</div>
+        <div class="stat-number">{weekly_total:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
     st.markdown(f"""
-    <div class="card">
-        <div class="small-label">週間目標まで残り</div>
-        <div class="big-number">{remaining:.1f}h</div>
+    <div class="stat-card">
+        <div class="stat-label">残り</div>
+        <div class="stat-number">{remaining:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
 
+col3, col4 = st.columns(2)
+
 with col3:
     st.markdown(f"""
-    <div class="card">
-        <div class="small-label">連続勉強</div>
-        <div class="big-number">{streak}日</div>
+    <div class="stat-card">
+        <div class="stat-label">連続</div>
+        <div class="stat-number">{streak}日</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col4:
     st.markdown(f"""
-    <div class="card">
-        <div class="small-label">総勉強時間</div>
-        <div class="big-number">{total_hours:.1f}h</div>
+    <div class="stat-card">
+        <div class="stat-label">レベル</div>
+        <div class="stat-number">Lv.{level}</div>
     </div>
     """, unsafe_allow_html=True)
 
-with col5:
-    st.markdown(f"""
-    <div class="card">
-        <div class="small-label">レベル</div>
-        <div class="big-number">Lv.{level}</div>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown(f"""
+<div class="stat-card">
+    <div class="stat-label">総勉強時間</div>
+    <div class="stat-number">{total_hours:.1f}h</div>
+</div>
+""", unsafe_allow_html=True)
 
 
-st.subheader("今週の達成率")
+st.markdown('<div class="section-title">進捗</div>', unsafe_allow_html=True)
+
+st.write("今週の達成率")
 st.progress(achievement / 100)
 st.write(f"{achievement:.1f}% 達成")
 
-st.subheader("レベル進捗")
+st.write("レベル進捗")
 st.progress(level_progress)
 st.write(f"あと {remaining_for_level:.1f} 時間で Lv.{level + 1}")
-
 
 if remaining == 0:
     st.success("今週の目標達成！かなり良いペース。")
@@ -388,111 +459,103 @@ else:
     st.warning("まずは30分だけでOK。ゼロにしないのが大事。")
 
 
-st.subheader("獲得バッジ")
+st.markdown('<div class="section-title">獲得バッジ</div>', unsafe_allow_html=True)
 
 if badges:
-    badge_cols = st.columns(3)
+    badge_html = ""
+    for icon, title, desc in badges:
+        badge_html += f'<span class="badge-pill">{icon} {title}</span>'
 
-    for i, badge in enumerate(badges):
-        icon, title, desc = badge
-
-        with badge_cols[i % 3]:
-            st.markdown(f"""
-            <div class="card">
-                <div style="font-size: 34px;">{icon}</div>
-                <div class="badge-title">{title}</div>
-                <div class="badge-desc">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    st.markdown(badge_html, unsafe_allow_html=True)
 else:
     st.write("まだバッジはありません。まずは1時間勉強してみよう。")
 
 
-st.divider()
+st.markdown('<div class="section-title">今日のクエスト</div>', unsafe_allow_html=True)
 
-st.header("今日のクエストを記録")
+with st.container():
+    st.markdown('<div class="quest-card">', unsafe_allow_html=True)
 
-with st.expander("＋ 科目を追加する"):
-    new_subject_main = st.text_input("追加したい科目", key="new_subject_main")
+    with st.expander("＋ 科目を追加する"):
+        new_subject_main = st.text_input("追加したい科目", key="new_subject_main")
 
-    if st.button("この科目を追加", key="add_subject_main"):
-        if new_subject_main.strip():
-            exists = (
-                (subjects_df["user_id"] == user_id)
-                &
-                (subjects_df["subject"] == new_subject_main.strip())
-            ).any()
+        if st.button("この科目を追加", key="add_subject_main"):
+            if new_subject_main.strip():
+                exists = (
+                    (subjects_df["user_id"] == user_id)
+                    &
+                    (subjects_df["subject"] == new_subject_main.strip())
+                ).any()
 
-            if not exists:
-                new_row = pd.DataFrame([{
-                    "user_id": user_id,
-                    "subject": new_subject_main.strip()
-                }])
+                if not exists:
+                    new_row = pd.DataFrame([{
+                        "user_id": user_id,
+                        "subject": new_subject_main.strip()
+                    }])
 
-                subjects_df = pd.concat([subjects_df, new_row], ignore_index=True)
-                save_csv(subjects_df, SUBJECT_FILE)
+                    subjects_df = pd.concat([subjects_df, new_row], ignore_index=True)
+                    save_csv(subjects_df, SUBJECT_FILE)
 
-                st.success("科目を追加しました")
-                st.rerun()
+                    st.success("科目を追加しました")
+                    st.rerun()
+                else:
+                    st.warning("その科目は既にあります")
             else:
-                st.warning("その科目は既にあります")
-        else:
-            st.warning("科目名を入力してください")
+                st.warning("科目名を入力してください")
+
+    with st.form("study_form"):
+        subject = st.selectbox("科目", user_subjects)
+
+        hours = st.number_input(
+            "勉強時間",
+            min_value=0.0,
+            value=1.0,
+            step=0.5
+        )
+
+        focus = st.slider(
+            "集中度",
+            min_value=0,
+            max_value=100,
+            value=70
+        )
+
+        memo = st.text_area(
+            "メモ",
+            placeholder="例：統計の仮説検定を復習した"
+        )
+
+        submitted = st.form_submit_button("記録する")
+
+        if submitted:
+            old_total_hours = total_hours
+            old_level, _, _, _ = calc_level(old_total_hours)
+
+            new_log = pd.DataFrame([{
+                "user_id": user_id,
+                "date": str(today),
+                "subject": subject,
+                "hours": hours,
+                "focus": focus,
+                "memo": memo
+            }])
+
+            logs = pd.concat([logs, new_log], ignore_index=True)
+            save_csv(logs, LOG_FILE)
+
+            new_total_hours = old_total_hours + hours
+            new_level, _, _, _ = calc_level(new_total_hours)
+
+            if new_level > old_level:
+                st.balloons()
+                st.success(f"🎉 レベルアップ！ Lv.{new_level} になりました！")
+            else:
+                st.success("記録しました！ページを再読み込みすると反映されます。")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
-with st.form("study_form"):
-    subject = st.selectbox("科目", user_subjects)
-
-    hours = st.number_input(
-        "勉強時間",
-        min_value=0.0,
-        value=1.0,
-        step=0.5
-    )
-
-    focus = st.slider(
-        "集中度",
-        min_value=0,
-        max_value=100,
-        value=70
-    )
-
-    memo = st.text_area(
-        "メモ",
-        placeholder="例：統計の仮説検定を復習した"
-    )
-
-    submitted = st.form_submit_button("記録する")
-
-    if submitted:
-        old_total_hours = total_hours
-        old_level, _, _, _ = calc_level(old_total_hours)
-
-        new_log = pd.DataFrame([{
-            "user_id": user_id,
-            "date": str(today),
-            "subject": subject,
-            "hours": hours,
-            "focus": focus,
-            "memo": memo
-        }])
-
-        logs = pd.concat([logs, new_log], ignore_index=True)
-        save_csv(logs, LOG_FILE)
-
-        new_total_hours = old_total_hours + hours
-        new_level, _, _, _ = calc_level(new_total_hours)
-
-        if new_level > old_level:
-            st.balloons()
-            st.success(f"🎉 レベルアップ！ Lv.{new_level} になりました！")
-        else:
-            st.success("記録しました！ページを再読み込みすると反映されます。")
-
-
-st.divider()
-
-st.header("今週の記録")
+st.markdown('<div class="section-title">今週の記録</div>', unsafe_allow_html=True)
 
 if week_logs.empty:
     st.write("今週の記録はまだありません。")
@@ -503,7 +566,7 @@ else:
 
     st.dataframe(display_logs, use_container_width=True)
 
-    st.subheader("科目別勉強時間")
+    st.markdown('<div class="section-title">科目別勉強時間</div>', unsafe_allow_html=True)
 
     subject_summary = (
         week_logs
@@ -514,9 +577,7 @@ else:
 
     st.bar_chart(subject_summary, x="subject", y="hours")
 
-    st.divider()
-
-    st.subheader("🗑️ 記録を削除")
+    st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
 
     delete_options = []
 
