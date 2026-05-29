@@ -175,7 +175,6 @@ st.markdown("""
     padding-right: 1rem;
     max-width: 760px;
 }
-
 .hero {
     background: linear-gradient(135deg, #111827, #4f46e5, #ec4899);
     padding: 26px;
@@ -184,18 +183,15 @@ st.markdown("""
     margin-bottom: 20px;
     box-shadow: 0 18px 40px rgba(79,70,229,0.25);
 }
-
 .hero h1 {
     font-size: 42px;
     line-height: 1.05;
     margin-bottom: 14px;
 }
-
 .hero h3 {
     font-size: 24px;
     line-height: 1.3;
 }
-
 .mission-card {
     background: linear-gradient(135deg, #fff7ed, #ffedd5);
     padding: 20px;
@@ -204,7 +200,6 @@ st.markdown("""
     margin-bottom: 18px;
     font-size: 18px;
 }
-
 .stat-card {
     background: white;
     padding: 18px;
@@ -213,19 +208,16 @@ st.markdown("""
     border: 1px solid #eef2f7;
     margin-bottom: 12px;
 }
-
 .stat-label {
     color: #64748b;
     font-size: 14px;
     margin-bottom: 6px;
 }
-
 .stat-number {
     color: #111827;
     font-size: 32px;
     font-weight: 900;
 }
-
 .quest-card {
     background: white;
     padding: 20px;
@@ -234,7 +226,6 @@ st.markdown("""
     border: 1px solid #e5e7eb;
     margin-bottom: 18px;
 }
-
 .badge-pill {
     display: inline-block;
     background: #f1f5f9;
@@ -244,18 +235,11 @@ st.markdown("""
     font-weight: 700;
     font-size: 14px;
 }
-
 .section-title {
     font-size: 28px;
     font-weight: 900;
     margin-top: 24px;
     margin-bottom: 12px;
-}
-
-div[data-testid="stMetric"] {
-    background: white;
-    padding: 16px;
-    border-radius: 18px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -270,23 +254,15 @@ default_users = {
     "shiori": {"name": "しおり", "weekly_goal": 35.0},
 }
 
-default_subjects = [
-    "統計",
-    "線形代数",
-    "微分積分",
-    "英語",
-    "情報",
-    "法律",
-    "その他"
-]
+default_subjects_map = {
+    "syun": ["線形代数", "統計", "微分積分", "法律", "その他"],
+    "shiori": ["民法", "憲法", "刑法", "民事訴訟法", "刑事訴訟法", "商法", "知的財産法", "その他"],
+}
 
 
 st.sidebar.title("⚙️ 設定")
 
-user_id = st.sidebar.selectbox(
-    "ユーザーを選択",
-    ["syun", "shiori"]
-)
+user_id = st.sidebar.selectbox("ユーザーを選択", ["syun", "shiori"])
 
 user_data = users[users["user_id"] == user_id]
 
@@ -311,16 +287,13 @@ edit_weekly_goal = st.sidebar.number_input(
 
 if st.sidebar.button("プロフィールを保存"):
     users = users[users["user_id"] != user_id]
-
     new_user = pd.DataFrame([{
         "user_id": user_id,
         "name": edit_name,
         "weekly_goal": edit_weekly_goal
     }])
-
     users = pd.concat([users, new_user], ignore_index=True)
     save_csv(users, USER_FILE)
-
     st.sidebar.success("保存しました")
     st.rerun()
 
@@ -330,7 +303,30 @@ user_subjects = subjects_df[
 ]["subject"].tolist()
 
 if not user_subjects:
-    user_subjects = default_subjects
+    user_subjects = default_subjects_map[user_id]
+
+st.sidebar.divider()
+st.sidebar.subheader("科目追加")
+
+new_subject_sidebar = st.sidebar.text_input("追加したい科目")
+
+if st.sidebar.button("科目を追加"):
+    if new_subject_sidebar.strip():
+        subject_name = new_subject_sidebar.strip()
+
+        if subject_name in user_subjects:
+            st.sidebar.warning("その科目は既にあります")
+        else:
+            new_row = pd.DataFrame([{
+                "user_id": user_id,
+                "subject": subject_name
+            }])
+            subjects_df = pd.concat([subjects_df, new_row], ignore_index=True)
+            save_csv(subjects_df, SUBJECT_FILE)
+            st.sidebar.success("科目を追加しました")
+            st.rerun()
+    else:
+        st.sidebar.warning("科目名を入力してください")
 
 
 today = date.today()
@@ -341,8 +337,7 @@ user_logs = logs[logs["user_id"] == user_id].copy()
 if not user_logs.empty:
     user_logs["date_dt"] = pd.to_datetime(user_logs["date"]).dt.date
     week_logs = user_logs[
-        (user_logs["date_dt"] >= week_start)
-        &
+        (user_logs["date_dt"] >= week_start) &
         (user_logs["date_dt"] <= week_end)
     ]
 else:
@@ -350,23 +345,15 @@ else:
 
 weekly_total = week_logs["hours"].sum() if not week_logs.empty else 0
 total_hours = user_logs["hours"].sum() if not user_logs.empty else 0
-
 remaining = max(edit_weekly_goal - weekly_total, 0)
 achievement = min((weekly_total / edit_weekly_goal) * 100, 100)
 
 streak = calc_streak(user_logs)
-
 level, progress_in_level, required_for_level, next_level_total = calc_level(total_hours)
 level_progress = progress_in_level / required_for_level
 remaining_for_level = next_level_total - total_hours
 
-badges = get_badges(
-    total_hours,
-    streak,
-    weekly_total,
-    edit_weekly_goal,
-    user_logs
-)
+badges = get_badges(total_hours, streak, weekly_total, edit_weekly_goal, user_logs)
 
 
 if remaining == 0:
@@ -449,15 +436,6 @@ st.write("レベル進捗")
 st.progress(level_progress)
 st.write(f"あと {remaining_for_level:.1f} 時間で Lv.{level + 1}")
 
-if remaining == 0:
-    st.success("今週の目標達成！かなり良いペース。")
-elif achievement >= 70:
-    st.info("あと少し。今日は軽めでも積めば勝ち。")
-elif achievement >= 40:
-    st.info("中盤まで来てる。今日1〜2時間できるとかなり楽。")
-else:
-    st.warning("まずは30分だけでOK。ゼロにしないのが大事。")
-
 
 st.markdown('<div class="section-title">獲得バッジ</div>', unsafe_allow_html=True)
 
@@ -465,7 +443,6 @@ if badges:
     badge_html = ""
     for icon, title, desc in badges:
         badge_html += f'<span class="badge-pill">{icon} {title}</span>'
-
     st.markdown(badge_html, unsafe_allow_html=True)
 else:
     st.write("まだバッジはありません。まずは1時間勉強してみよう。")
@@ -476,60 +453,17 @@ st.markdown('<div class="section-title">今日のクエスト</div>', unsafe_all
 with st.container():
     st.markdown('<div class="quest-card">', unsafe_allow_html=True)
 
-    with st.expander("＋ 科目を追加する"):
-        new_subject_main = st.text_input("追加したい科目", key="new_subject_main")
-
-        if st.button("この科目を追加", key="add_subject_main"):
-            if new_subject_main.strip():
-                exists = (
-                    (subjects_df["user_id"] == user_id)
-                    &
-                    (subjects_df["subject"] == new_subject_main.strip())
-                ).any()
-
-                if not exists:
-                    new_row = pd.DataFrame([{
-                        "user_id": user_id,
-                        "subject": new_subject_main.strip()
-                    }])
-
-                    subjects_df = pd.concat([subjects_df, new_row], ignore_index=True)
-                    save_csv(subjects_df, SUBJECT_FILE)
-
-                    st.success("科目を追加しました")
-                    st.rerun()
-                else:
-                    st.warning("その科目は既にあります")
-            else:
-                st.warning("科目名を入力してください")
-
     with st.form("study_form"):
         subject = st.selectbox("科目", user_subjects)
 
-        hours = st.number_input(
-            "勉強時間",
-            min_value=0.0,
-            value=1.0,
-            step=0.5
-        )
-
-        focus = st.slider(
-            "集中度",
-            min_value=0,
-            max_value=100,
-            value=70
-        )
-
-        memo = st.text_area(
-            "メモ",
-            placeholder="例：統計の仮説検定を復習した"
-        )
+        hours = st.number_input("勉強時間", min_value=0.0, value=1.0, step=0.5)
+        focus = st.slider("集中度", min_value=0, max_value=100, value=70)
+        memo = st.text_area("メモ", placeholder="例：統計の仮説検定を復習した")
 
         submitted = st.form_submit_button("記録する")
 
         if submitted:
-            old_total_hours = total_hours
-            old_level, _, _, _ = calc_level(old_total_hours)
+            old_level, _, _, _ = calc_level(total_hours)
 
             new_log = pd.DataFrame([{
                 "user_id": user_id,
@@ -543,8 +477,7 @@ with st.container():
             logs = pd.concat([logs, new_log], ignore_index=True)
             save_csv(logs, LOG_FILE)
 
-            new_total_hours = old_total_hours + hours
-            new_level, _, _, _ = calc_level(new_total_hours)
+            new_level, _, _, _ = calc_level(total_hours + hours)
 
             if new_level > old_level:
                 st.balloons()
@@ -568,13 +501,7 @@ else:
 
     st.markdown('<div class="section-title">科目別勉強時間</div>', unsafe_allow_html=True)
 
-    subject_summary = (
-        week_logs
-        .groupby("subject")["hours"]
-        .sum()
-        .reset_index()
-    )
-
+    subject_summary = week_logs.groupby("subject")["hours"].sum().reset_index()
     st.bar_chart(subject_summary, x="subject", y="hours")
 
     st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
@@ -582,12 +509,7 @@ else:
     delete_options = []
 
     for idx, row in display_logs.iterrows():
-        label = (
-            f"{row['date']} | "
-            f"{row['subject']} | "
-            f"{row['hours']}h | "
-            f"集中{row['focus']}%"
-        )
+        label = f"{row['date']} | {row['subject']} | {row['hours']}h | 集中{row['focus']}%"
         delete_options.append((idx, label))
 
     if delete_options:
