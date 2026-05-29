@@ -513,3 +513,32 @@ else:
     )
 
     st.bar_chart(subject_summary, x="subject", y="hours")
+
+    st.divider()
+
+    st.subheader("🗑️ 記録を削除")
+
+    delete_options = []
+
+    for idx, row in display_logs.iterrows():
+        label = (
+            f"{row['date']} | "
+            f"{row['subject']} | "
+            f"{row['hours']}h | "
+            f"集中{row['focus']}%"
+        )
+        delete_options.append((idx, label))
+
+    if delete_options:
+        selected_delete = st.selectbox(
+            "削除する記録を選択",
+            delete_options,
+            format_func=lambda x: x[1]
+        )
+
+        if st.button("この記録を削除"):
+            delete_idx = selected_delete[0]
+            logs = logs.drop(delete_idx)
+            save_csv(logs, LOG_FILE)
+            st.success("記録を削除しました")
+            st.rerun()
