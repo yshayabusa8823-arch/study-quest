@@ -52,6 +52,7 @@ def load_sheet(sheet, columns):
     records = sheet.get_all_records()
     if not records:
         return pd.DataFrame(columns=columns)
+
     df = pd.DataFrame(records)
 
     for col in columns:
@@ -59,45 +60,6 @@ def load_sheet(sheet, columns):
             df[col] = ""
 
     return df[columns]
-
-
-def append_log(user_id, log_date, subject, hours, focus, memo):
-    logs_sheet.append_row([
-        user_id,
-        str(log_date),
-        subject,
-        float(hours),
-        int(focus),
-        memo
-    ])
-
-
-def append_subject(user_id, subject):
-    subjects_sheet.append_row([user_id, subject])
-
-
-def upsert_user(user_id, name, weekly_goal):
-    users = load_users()
-
-    # headerが1行目なので、実データは2行目から
-    target_row = None
-
-    for i, row in users.iterrows():
-        if row["user_id"] == user_id:
-            target_row = i + 2
-            break
-
-    if target_row:
-        users_sheet.update(
-            f"A{target_row}:C{target_row}",
-            [[user_id, name, float(weekly_goal)]]
-        )
-    else:
-        users_sheet.append_row([user_id, name, float(weekly_goal)])
-
-
-def delete_log_by_sheet_row(sheet_row):
-    logs_sheet.delete_rows(sheet_row)
 
 
 def load_logs():
@@ -120,7 +82,10 @@ def load_users():
     )
 
     if not df.empty:
-        df["weekly_goal"] = pd.to_numeric(df["weekly_goal"], errors="coerce").fillna(25)
+        df["weekly_goal"] = pd.to_numeric(
+            df["weekly_goal"],
+            errors="coerce"
+        ).fillna(25)
 
     return df
 
@@ -130,6 +95,43 @@ def load_subjects():
         subjects_sheet,
         ["user_id", "subject"]
     )
+
+
+def append_log(user_id, log_date, subject, hours, focus, memo):
+    logs_sheet.append_row([
+        user_id,
+        str(log_date),
+        subject,
+        float(hours),
+        int(focus),
+        memo
+    ])
+
+
+def append_subject(user_id, subject):
+    subjects_sheet.append_row([user_id, subject])
+
+
+def upsert_user(user_id, name, weekly_goal):
+    users = load_users()
+    target_row = None
+
+    for i, row in users.iterrows():
+        if row["user_id"] == user_id:
+            target_row = i + 2
+            break
+
+    if target_row:
+        users_sheet.update(
+            f"A{target_row}:C{target_row}",
+            [[user_id, name, float(weekly_goal)]]
+        )
+    else:
+        users_sheet.append_row([user_id, name, float(weekly_goal)])
+
+
+def delete_log_by_sheet_row(sheet_row):
+    logs_sheet.delete_rows(sheet_row)
 
 
 # =====================
@@ -146,7 +148,11 @@ def calc_streak(user_logs):
     if user_logs.empty:
         return 0
 
-    dates = sorted(pd.to_datetime(user_logs["date"]).dt.date.unique(), reverse=True)
+    dates = sorted(
+        pd.to_datetime(user_logs["date"]).dt.date.unique(),
+        reverse=True
+    )
+
     current = date.today()
     streak = 0
 
@@ -163,103 +169,212 @@ def calc_level(total_hours):
     current_level_total = (level - 1) * 10
     progress_in_level = total_hours - current_level_total
     required_for_level = next_level_total - current_level_total
+
     return level, progress_in_level, required_for_level, next_level_total
 
 
-def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
+# =====================
+# バッジ図鑑
+# =====================
+
+def get_badge_catalog(user_logs):
     badges = []
 
     hour_badges = [
-        (1, "🌱", "はじめの一歩"),
-        (5, "🐣", "助走開始"),
-        (10, "📚", "10時間突破"),
-        (25, "🥉", "25時間突破"),
-        (50, "🏆", "50時間突破"),
-        (75, "🥈", "75時間突破"),
-        (100, "👑", "100時間突破"),
-        (150, "💪", "努力家"),
-        (200, "🔥", "継続の達人"),
-        (300, "💎", "300時間突破"),
-        (500, "🚀", "500時間突破"),
-        (1000, "🌌", "1000時間の境地"),
+        (1, "🌱", "はじめの一歩", "累計1時間勉強する"),
+        (3, "🧃", "軽く始動", "累計3時間勉強する"),
+        (5, "🐣", "助走開始", "累計5時間勉強する"),
+        (10, "📚", "10時間突破", "累計10時間勉強する"),
+        (20, "🧱", "土台づくり", "累計20時間勉強する"),
+        (25, "🥉", "25時間突破", "累計25時間勉強する"),
+        (50, "🏆", "50時間突破", "累計50時間勉強する"),
+        (75, "🥈", "75時間突破", "累計75時間勉強する"),
+        (100, "👑", "100時間突破", "累計100時間勉強する"),
+        (150, "💪", "努力家", "累計150時間勉強する"),
+        (200, "🔥", "継続の達人", "累計200時間勉強する"),
+        (300, "💎", "300時間突破", "累計300時間勉強する"),
+        (500, "🚀", "500時間突破", "累計500時間勉強する"),
+        (1000, "🌌", "1000時間の境地", "累計1000時間勉強する"),
     ]
 
-    for target, icon, title in hour_badges:
-        if total_hours >= target:
-            badges.append((icon, title))
+    for target, icon, title, desc in hour_badges:
+        badges.append({
+            "type": "累計時間",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "total_hours",
+            "target": target
+        })
 
     streak_badges = [
-        (2, "🧩", "2日連続"),
-        (3, "🔥", "継続の火"),
-        (7, "🗓️", "一週間継続"),
-        (14, "⚔️", "二週間継続"),
-        (30, "🏯", "習慣化成功"),
-        (50, "🦁", "継続王"),
-        (100, "👑", "継続皇帝"),
+        (2, "🧩", "2日連続", "2日連続で記録する"),
+        (3, "🔥", "継続の火", "3日連続で記録する"),
+        (5, "🌿", "習慣の芽", "5日連続で記録する"),
+        (7, "🗓️", "一週間継続", "7日連続で記録する"),
+        (14, "⚔️", "二週間継続", "14日連続で記録する"),
+        (30, "🏯", "習慣化成功", "30日連続で記録する"),
+        (50, "🦁", "継続王", "50日連続で記録する"),
+        (100, "👑", "継続皇帝", "100日連続で記録する"),
     ]
 
-    for target, icon, title in streak_badges:
-        if streak >= target:
-            badges.append((icon, title))
+    for target, icon, title, desc in streak_badges:
+        badges.append({
+            "type": "連続記録",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "streak",
+            "target": target
+        })
 
-    if weekly_total >= weekly_goal:
-        badges.append(("🎯", "週間目標達成"))
+    weekly_badges = [
+        (1.0, "🎯", "週間目標達成", "今週の目標を達成する"),
+        (1.2, "🚴", "目標超え", "週間目標の120%を達成する"),
+        (1.5, "🦅", "大幅達成", "週間目標の150%を達成する"),
+        (2.0, "🐉", "圧倒的達成", "週間目標の200%を達成する"),
+    ]
 
-    if weekly_total >= weekly_goal * 1.2:
-        badges.append(("🚴", "目標超え"))
+    for rate, icon, title, desc in weekly_badges:
+        badges.append({
+            "type": "週間目標",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "weekly_rate",
+            "target": rate
+        })
 
-    if weekly_total >= weekly_goal * 1.5:
-        badges.append(("🦅", "大幅達成"))
+    focus_badges = [
+        (80, "🎧", "集中モード", "集中度80%以上を記録する"),
+        (90, "⚡", "集中マスター", "集中度90%以上を記録する"),
+        (100, "🧠", "完全集中", "集中度100%を記録する"),
+    ]
+
+    for target, icon, title, desc in focus_badges:
+        badges.append({
+            "type": "集中度",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "max_focus",
+            "target": target
+        })
+
+    high_focus_count_badges = [
+        (3, "🔎", "集中の再現", "集中度90%以上を3回記録する"),
+        (5, "🔮", "集中の再現性", "集中度90%以上を5回記録する"),
+        (10, "🧘", "集中の達人", "集中度90%以上を10回記録する"),
+    ]
+
+    for target, icon, title, desc in high_focus_count_badges:
+        badges.append({
+            "type": "集中回数",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "high_focus_count",
+            "target": target
+        })
+
+    one_day_badges = [
+        (2, "☕", "2時間クエスト", "1回で2時間以上勉強する"),
+        (3, "⏳", "3時間クエスト", "1回で3時間以上勉強する"),
+        (5, "🗻", "5時間クエスト", "1回で5時間以上勉強する"),
+        (8, "🐉", "限界突破", "1回で8時間以上勉強する"),
+    ]
+
+    for target, icon, title, desc in one_day_badges:
+        badges.append({
+            "type": "一回の勉強",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "max_hours",
+            "target": target
+        })
+
+    count_badges = [
+        (3, "✍️", "記録初心者", "3回記録する"),
+        (10, "📘", "記録習慣", "10回記録する"),
+        (30, "📒", "ログ職人", "30回記録する"),
+        (50, "🗂️", "記録マスター", "50回記録する"),
+        (100, "🧾", "記録の鬼", "100回記録する"),
+    ]
+
+    for target, icon, title, desc in count_badges:
+        badges.append({
+            "type": "記録回数",
+            "icon": icon,
+            "title": title,
+            "desc": desc,
+            "condition": "log_count",
+            "target": target
+        })
 
     if not user_logs.empty:
-        log_count = len(user_logs)
+        subjects = sorted(user_logs["subject"].dropna().unique())
 
-        count_badges = [
-            (3, "✍️", "記録初心者"),
-            (10, "📘", "記録習慣"),
-            (30, "📒", "ログ職人"),
-            (50, "🗂️", "記録マスター"),
-            (100, "🧾", "記録の鬼"),
-        ]
-
-        for target, icon, title in count_badges:
-            if log_count >= target:
-                badges.append((icon, title))
-
-        if user_logs["focus"].max() >= 90:
-            badges.append(("⚡", "集中マスター"))
-
-        if user_logs["focus"].max() >= 100:
-            badges.append(("🧠", "完全集中"))
-
-        if len(user_logs[user_logs["focus"] >= 90]) >= 5:
-            badges.append(("🔮", "集中の再現性"))
-
-        if len(user_logs[user_logs["focus"] >= 90]) >= 10:
-            badges.append(("🧘", "集中の達人"))
-
-        if user_logs["hours"].max() >= 3:
-            badges.append(("⏳", "3時間クエスト"))
-
-        if user_logs["hours"].max() >= 5:
-            badges.append(("🗻", "5時間クエスト"))
-
-        if user_logs["hours"].max() >= 8:
-            badges.append(("🐉", "限界突破"))
-
-        subject_totals = user_logs.groupby("subject")["hours"].sum()
-
-        for subject, hours in subject_totals.items():
-            if hours >= 10:
-                badges.append(("📖", f"{subject} 10時間"))
-            if hours >= 30:
-                badges.append(("🎓", f"{subject} 30時間"))
-            if hours >= 50:
-                badges.append(("🏅", f"{subject} 50時間"))
-            if hours >= 100:
-                badges.append(("👑", f"{subject} マスター"))
+        for subject in subjects:
+            for target, icon, label in [
+                (10, "📖", "10時間"),
+                (30, "🎓", "30時間"),
+                (50, "🏅", "50時間"),
+                (100, "👑", "マスター"),
+            ]:
+                badges.append({
+                    "type": "科目別",
+                    "icon": icon,
+                    "title": f"{subject} {label}",
+                    "desc": f"{subject}を累計{target}時間勉強する",
+                    "condition": "subject_hours",
+                    "target": target,
+                    "subject": subject
+                })
 
     return badges
+
+
+def is_badge_unlocked(
+    badge,
+    total_hours,
+    streak,
+    weekly_total,
+    weekly_goal,
+    user_logs
+):
+    condition = badge["condition"]
+
+    if condition == "total_hours":
+        return total_hours >= badge["target"]
+
+    if condition == "streak":
+        return streak >= badge["target"]
+
+    if condition == "weekly_rate":
+        return weekly_total >= weekly_goal * badge["target"]
+
+    if user_logs.empty:
+        return False
+
+    if condition == "max_focus":
+        return user_logs["focus"].max() >= badge["target"]
+
+    if condition == "high_focus_count":
+        return len(user_logs[user_logs["focus"] >= 90]) >= badge["target"]
+
+    if condition == "max_hours":
+        return user_logs["hours"].max() >= badge["target"]
+
+    if condition == "log_count":
+        return len(user_logs) >= badge["target"]
+
+    if condition == "subject_hours":
+        subject = badge.get("subject")
+        subject_total = user_logs[user_logs["subject"] == subject]["hours"].sum()
+        return subject_total >= badge["target"]
+
+    return False
 
 
 # =====================
@@ -274,6 +389,7 @@ st.markdown("""
     padding-right: 1rem;
     max-width: 760px;
 }
+
 .hero {
     background: linear-gradient(135deg, #111827, #4f46e5, #ec4899);
     padding: 26px;
@@ -282,15 +398,18 @@ st.markdown("""
     margin-bottom: 20px;
     box-shadow: 0 18px 40px rgba(79,70,229,0.25);
 }
+
 .hero h1 {
     font-size: 42px;
     line-height: 1.05;
     margin-bottom: 14px;
 }
+
 .hero h3 {
     font-size: 24px;
     line-height: 1.3;
 }
+
 .mission-card {
     background: linear-gradient(135deg, #fff7ed, #ffedd5);
     padding: 20px;
@@ -299,6 +418,7 @@ st.markdown("""
     margin-bottom: 18px;
     font-size: 18px;
 }
+
 .stat-card {
     background: white;
     padding: 18px;
@@ -307,16 +427,19 @@ st.markdown("""
     border: 1px solid #eef2f7;
     margin-bottom: 12px;
 }
+
 .stat-label {
     color: #64748b;
     font-size: 14px;
     margin-bottom: 6px;
 }
+
 .stat-number {
     color: #111827;
     font-size: 32px;
     font-weight: 900;
 }
+
 .quest-card {
     background: white;
     padding: 20px;
@@ -325,20 +448,89 @@ st.markdown("""
     border: 1px solid #e5e7eb;
     margin-bottom: 18px;
 }
-.badge-pill {
-    display: inline-block;
-    background: #f1f5f9;
-    padding: 10px 14px;
-    border-radius: 999px;
-    margin: 5px 4px;
-    font-weight: 700;
-    font-size: 14px;
-}
+
 .section-title {
     font-size: 28px;
     font-weight: 900;
     margin-top: 24px;
     margin-bottom: 12px;
+}
+
+.badge-card {
+    background: white;
+    border-radius: 22px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 8px 22px rgba(15,23,42,0.07);
+    border: 1px solid #dbeafe;
+}
+
+.badge-card-locked {
+    background: #f8fafc;
+    border-radius: 22px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid #e5e7eb;
+    opacity: 0.42;
+}
+
+.badge-icon {
+    font-size: 30px;
+    margin-bottom: 4px;
+}
+
+.badge-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #111827;
+}
+
+.badge-type {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 3px;
+}
+
+.badge-desc {
+    font-size: 13px;
+    color: #475569;
+    margin-top: 8px;
+}
+
+.log-card {
+    background: white;
+    padding: 16px;
+    border-radius: 20px;
+    margin-bottom: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 8px 20px rgba(15,23,42,0.06);
+}
+
+.log-date {
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.log-main {
+    font-size: 18px;
+    font-weight: 900;
+    color: #111827;
+}
+
+.log-sub {
+    color: #475569;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+.log-memo {
+    background: #f8fafc;
+    padding: 10px;
+    border-radius: 12px;
+    margin-top: 10px;
+    color: #334155;
+    font-size: 14px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -438,7 +630,7 @@ if not user_logs.empty:
     week_logs = user_logs[
         (user_logs["date_dt"] >= week_start) &
         (user_logs["date_dt"] <= week_end)
-    ]
+    ].copy()
 else:
     week_logs = pd.DataFrame()
 
@@ -453,8 +645,19 @@ level, progress_in_level, required_for_level, next_level_total = calc_level(tota
 level_progress = progress_in_level / required_for_level
 remaining_for_level = next_level_total - total_hours
 
-badges = get_badges(total_hours, streak, weekly_total, edit_weekly_goal, user_logs)
+badge_catalog = get_badge_catalog(user_logs)
 
+unlocked_badges = [
+    badge for badge in badge_catalog
+    if is_badge_unlocked(
+        badge,
+        total_hours,
+        streak,
+        weekly_total,
+        edit_weekly_goal,
+        user_logs
+    )
+]
 
 if remaining == 0:
     mission_text = "🎉 今週の目標達成！今日は復習か軽めの積み上げでOK。"
@@ -541,16 +744,34 @@ st.progress(level_progress)
 st.write(f"あと {remaining_for_level:.1f} 時間で Lv.{level + 1}")
 
 
+# =====================
+# 獲得済みバッジ
+# =====================
+
 st.markdown('<div class="section-title">獲得バッジ</div>', unsafe_allow_html=True)
 
-if badges:
-    badge_html = ""
-    for icon, title in badges:
-        badge_html += f'<span class="badge-pill">{icon} {title}</span>'
-    st.markdown(badge_html, unsafe_allow_html=True)
+if unlocked_badges:
+    cols = st.columns(2)
+
+    for i, badge in enumerate(unlocked_badges[:8]):
+        with cols[i % 2]:
+            st.markdown(f"""
+            <div class="badge-card">
+                <div class="badge-icon">{badge["icon"]}</div>
+                <div class="badge-title">{badge["title"]}</div>
+                <div class="badge-type">{badge["type"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    if len(unlocked_badges) > 8:
+        st.caption(f"ほか {len(unlocked_badges) - 8} 個のバッジを獲得済み")
 else:
     st.write("まだバッジはありません。まずは1時間勉強してみよう。")
 
+
+# =====================
+# 今日のクエスト
+# =====================
 
 st.markdown('<div class="section-title">今日のクエスト</div>', unsafe_allow_html=True)
 
@@ -583,6 +804,10 @@ with st.container():
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+# =====================
+# 今週の記録カード
+# =====================
+
 st.markdown('<div class="section-title">今週の記録</div>', unsafe_allow_html=True)
 
 if week_logs.empty:
@@ -594,16 +819,87 @@ else:
 
     display_logs = display_logs.sort_values("date", ascending=False)
 
-    st.dataframe(display_logs, use_container_width=True)
+    for _, row in display_logs.iterrows():
+        memo_text = row["memo"] if str(row["memo"]).strip() else "メモなし"
+
+        st.markdown(f"""
+        <div class="log-card">
+            <div class="log-date">{row["date"]}</div>
+            <div class="log-main">{row["subject"]}　{float(row["hours"]):.1f}h</div>
+            <div class="log-sub">集中度 {int(row["focus"])}%</div>
+            <div class="log-memo">{memo_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">科目別勉強時間</div>', unsafe_allow_html=True)
 
     subject_summary = week_logs.groupby("subject")["hours"].sum().reset_index()
-    st.bar_chart(subject_summary, x="subject", y="hours")
 
-    st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
+    for _, row in subject_summary.iterrows():
+        st.markdown(f"""
+        <div class="stat-card">
+            <div class="stat-label">{row["subject"]}</div>
+            <div class="stat-number">{float(row["hours"]):.1f}h</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # Google Sheetsの行番号を計算するため、logs全体から元indexを保持
+
+# =====================
+# バッジ図鑑
+# =====================
+
+st.markdown('<div class="section-title">バッジ図鑑</div>', unsafe_allow_html=True)
+
+badge_filter = st.selectbox(
+    "表示するバッジ",
+    ["すべて", "未獲得のみ", "獲得済みのみ"]
+)
+
+cols = st.columns(2)
+
+visible_index = 0
+
+for badge in badge_catalog:
+    unlocked = is_badge_unlocked(
+        badge,
+        total_hours,
+        streak,
+        weekly_total,
+        edit_weekly_goal,
+        user_logs
+    )
+
+    if badge_filter == "未獲得のみ" and unlocked:
+        continue
+
+    if badge_filter == "獲得済みのみ" and not unlocked:
+        continue
+
+    card_class = "badge-card" if unlocked else "badge-card-locked"
+    status = "獲得済み" if unlocked else "未獲得"
+
+    with cols[visible_index % 2]:
+        st.markdown(f"""
+        <div class="{card_class}">
+            <div class="badge-icon">{badge["icon"]}</div>
+            <div class="badge-title">{badge["title"]}</div>
+            <div class="badge-type">{badge["type"]}｜{status}</div>
+            <div class="badge-desc">{badge["desc"]}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    visible_index += 1
+
+
+# =====================
+# 記録削除
+# =====================
+
+st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
+
+if week_logs.empty:
+    st.write("削除できる今週の記録はありません。")
+else:
     user_week_logs = logs[logs["user_id"] == user_id].copy()
     user_week_logs["date_dt"] = pd.to_datetime(user_week_logs["date"]).dt.date
     user_week_logs = user_week_logs[
@@ -625,7 +921,12 @@ else:
             format_func=lambda x: x[1]
         )
 
+        confirm_delete = st.checkbox("本当に削除する")
+
         if st.button("この記録を削除"):
-            delete_log_by_sheet_row(selected_delete[0])
-            st.success("記録を削除しました")
-            st.rerun()
+            if confirm_delete:
+                delete_log_by_sheet_row(selected_delete[0])
+                st.success("記録を削除しました")
+                st.rerun()
+            else:
+                st.warning("削除するにはチェックを入れてください")
