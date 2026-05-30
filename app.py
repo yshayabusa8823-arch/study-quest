@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import date, timedelta
-from pathlib import Path
 
 st.set_page_config(
     page_title="Study Quest",
@@ -9,35 +10,131 @@ st.set_page_config(
     layout="centered"
 )
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
+SHEET_NAME = "StudyQuestDB"
 
-LOG_FILE = DATA_DIR / "study_logs.csv"
-USER_FILE = DATA_DIR / "users.csv"
-SUBJECT_FILE = DATA_DIR / "subjects.csv"
+# =====================
+# Google Sheets 接続
+# =====================
+
+@st.cache_resource
+def connect_sheets():
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
+    )
+
+    client = gspread.authorize(creds)
+    spreadsheet = client.open(SHEET_NAME)
+
+    return {
+        "logs": spreadsheet.worksheet("logs"),
+        "users": spreadsheet.worksheet("users"),
+        "subjects": spreadsheet.worksheet("subjects"),
+    }
 
 
-def load_csv(path, columns):
-    if path.exists():
-        return pd.read_csv(path)
-    return pd.DataFrame(columns=columns)
+sheets = connect_sheets()
+logs_sheet = sheets["logs"]
+users_sheet = sheets["users"]
+subjects_sheet = sheets["subjects"]
 
 
-def save_csv(df, path):
-    df.to_csv(path, index=False)
+# =====================
+# Sheets 読み書き
+# =====================
+
+def load_sheet(sheet, columns):
+    records = sheet.get_all_records()
+    if not records:
+        return pd.DataFrame(columns=columns)
+    df = pd.DataFrame(records)
+
+    for col in columns:
+        if col not in df.columns:
+            df[col] = ""
+
+    return df[columns]
+
+
+def append_log(user_id, log_date, subject, hours, focus, memo):
+    logs_sheet.append_row([
+        user_id,
+        str(log_date),
+        subject,
+        float(hours),
+        int(focus),
+        memo
+    ])
+
+
+def append_subject(user_id, subject):
+    subjects_sheet.append_row([user_id, subject])
+
+
+def upsert_user(user_id, name, weekly_goal):
+    users = load_users()
+
+    # headerが1行目なので、実データは2行目から
+    target_row = None
+
+    for i, row in users.iterrows():
+        if row["user_id"] == user_id:
+            target_row = i + 2
+            break
+
+    if target_row:
+        users_sheet.update(
+            f"A{target_row}:C{target_row}",
+            [[user_id, name, float(weekly_goal)]]
+        )
+    else:
+        users_sheet.append_row([user_id, name, float(weekly_goal)])
+
+
+def delete_log_by_sheet_row(sheet_row):
+    logs_sheet.delete_rows(sheet_row)
 
 
 def load_logs():
-    return load_csv(LOG_FILE, ["user_id", "date", "subject", "hours", "focus", "memo"])
+    df = load_sheet(
+        logs_sheet,
+        ["user_id", "date", "subject", "hours", "focus", "memo"]
+    )
+
+    if not df.empty:
+        df["hours"] = pd.to_numeric(df["hours"], errors="coerce").fillna(0)
+        df["focus"] = pd.to_numeric(df["focus"], errors="coerce").fillna(0)
+
+    return df
 
 
 def load_users():
-    return load_csv(USER_FILE, ["user_id", "name", "weekly_goal"])
+    df = load_sheet(
+        users_sheet,
+        ["user_id", "name", "weekly_goal"]
+    )
+
+    if not df.empty:
+        df["weekly_goal"] = pd.to_numeric(df["weekly_goal"], errors="coerce").fillna(25)
+
+    return df
 
 
 def load_subjects():
-    return load_csv(SUBJECT_FILE, ["user_id", "subject"])
+    return load_sheet(
+        subjects_sheet,
+        ["user_id", "subject"]
+    )
 
+
+# =====================
+# 計算
+# =====================
 
 def get_week_range(today):
     start = today - timedelta(days=today.weekday())
@@ -73,99 +170,101 @@ def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
     badges = []
 
     hour_badges = [
-        (1, "🌱", "はじめの一歩", "最初の1時間を達成"),
-        (5, "🐣", "助走開始", "総勉強時間5時間達成"),
-        (10, "📚", "10時間突破", "総勉強時間10時間達成"),
-        (25, "🥉", "25時間突破", "総勉強時間25時間達成"),
-        (50, "🏆", "50時間突破", "総勉強時間50時間達成"),
-        (75, "🥈", "75時間突破", "総勉強時間75時間達成"),
-        (100, "👑", "100時間突破", "総勉強時間100時間達成"),
-        (150, "💪", "努力家", "総勉強時間150時間達成"),
-        (200, "🔥", "継続の達人", "総勉強時間200時間達成"),
-        (300, "💎", "300時間突破", "総勉強時間300時間達成"),
-        (500, "🚀", "500時間突破", "総勉強時間500時間達成"),
-        (1000, "🌌", "1000時間の境地", "総勉強時間1000時間達成"),
+        (1, "🌱", "はじめの一歩"),
+        (5, "🐣", "助走開始"),
+        (10, "📚", "10時間突破"),
+        (25, "🥉", "25時間突破"),
+        (50, "🏆", "50時間突破"),
+        (75, "🥈", "75時間突破"),
+        (100, "👑", "100時間突破"),
+        (150, "💪", "努力家"),
+        (200, "🔥", "継続の達人"),
+        (300, "💎", "300時間突破"),
+        (500, "🚀", "500時間突破"),
+        (1000, "🌌", "1000時間の境地"),
     ]
 
-    for target, icon, title, desc in hour_badges:
+    for target, icon, title in hour_badges:
         if total_hours >= target:
-            badges.append((icon, title, desc))
+            badges.append((icon, title))
 
     streak_badges = [
-        (2, "🧩", "2日連続", "2日連続で勉強"),
-        (3, "🔥", "継続の火", "3日連続で勉強"),
-        (7, "🗓️", "一週間継続", "7日連続で勉強"),
-        (14, "⚔️", "二週間継続", "14日連続で勉強"),
-        (30, "🏯", "習慣化成功", "30日連続で勉強"),
-        (50, "🦁", "継続王", "50日連続で勉強"),
-        (100, "👑", "継続皇帝", "100日連続で勉強"),
+        (2, "🧩", "2日連続"),
+        (3, "🔥", "継続の火"),
+        (7, "🗓️", "一週間継続"),
+        (14, "⚔️", "二週間継続"),
+        (30, "🏯", "習慣化成功"),
+        (50, "🦁", "継続王"),
+        (100, "👑", "継続皇帝"),
     ]
 
-    for target, icon, title, desc in streak_badges:
+    for target, icon, title in streak_badges:
         if streak >= target:
-            badges.append((icon, title, desc))
+            badges.append((icon, title))
 
     if weekly_total >= weekly_goal:
-        badges.append(("🎯", "週間目標達成", "今週の目標時間を達成"))
+        badges.append(("🎯", "週間目標達成"))
 
     if weekly_total >= weekly_goal * 1.2:
-        badges.append(("🚴", "目標超え", "週間目標の120%を達成"))
+        badges.append(("🚴", "目標超え"))
 
     if weekly_total >= weekly_goal * 1.5:
-        badges.append(("🦅", "大幅達成", "週間目標の150%を達成"))
+        badges.append(("🦅", "大幅達成"))
 
     if not user_logs.empty:
         log_count = len(user_logs)
 
         count_badges = [
-            (3, "✍️", "記録初心者", "勉強記録3回達成"),
-            (10, "📘", "記録習慣", "勉強記録10回達成"),
-            (30, "📒", "ログ職人", "勉強記録30回達成"),
-            (50, "🗂️", "記録マスター", "勉強記録50回達成"),
-            (100, "🧾", "記録の鬼", "勉強記録100回達成"),
+            (3, "✍️", "記録初心者"),
+            (10, "📘", "記録習慣"),
+            (30, "📒", "ログ職人"),
+            (50, "🗂️", "記録マスター"),
+            (100, "🧾", "記録の鬼"),
         ]
 
-        for target, icon, title, desc in count_badges:
+        for target, icon, title in count_badges:
             if log_count >= target:
-                badges.append((icon, title, desc))
+                badges.append((icon, title))
 
         if user_logs["focus"].max() >= 90:
-            badges.append(("⚡", "集中マスター", "集中度90以上を記録"))
+            badges.append(("⚡", "集中マスター"))
 
         if user_logs["focus"].max() >= 100:
-            badges.append(("🧠", "完全集中", "集中度100を記録"))
+            badges.append(("🧠", "完全集中"))
 
-        high_focus_count = len(user_logs[user_logs["focus"] >= 90])
+        if len(user_logs[user_logs["focus"] >= 90]) >= 5:
+            badges.append(("🔮", "集中の再現性"))
 
-        if high_focus_count >= 5:
-            badges.append(("🔮", "集中の再現性", "集中度90以上を5回記録"))
-
-        if high_focus_count >= 10:
-            badges.append(("🧘", "集中の達人", "集中度90以上を10回記録"))
+        if len(user_logs[user_logs["focus"] >= 90]) >= 10:
+            badges.append(("🧘", "集中の達人"))
 
         if user_logs["hours"].max() >= 3:
-            badges.append(("⏳", "3時間クエスト", "1回で3時間以上勉強"))
+            badges.append(("⏳", "3時間クエスト"))
 
         if user_logs["hours"].max() >= 5:
-            badges.append(("🗻", "5時間クエスト", "1回で5時間以上勉強"))
+            badges.append(("🗻", "5時間クエスト"))
 
         if user_logs["hours"].max() >= 8:
-            badges.append(("🐉", "限界突破", "1回で8時間以上勉強"))
+            badges.append(("🐉", "限界突破"))
 
         subject_totals = user_logs.groupby("subject")["hours"].sum()
 
         for subject, hours in subject_totals.items():
             if hours >= 10:
-                badges.append(("📖", f"{subject} 10時間", f"{subject}を10時間勉強"))
+                badges.append(("📖", f"{subject} 10時間"))
             if hours >= 30:
-                badges.append(("🎓", f"{subject} 30時間", f"{subject}を30時間勉強"))
+                badges.append(("🎓", f"{subject} 30時間"))
             if hours >= 50:
-                badges.append(("🏅", f"{subject} 50時間", f"{subject}を50時間勉強"))
+                badges.append(("🏅", f"{subject} 50時間"))
             if hours >= 100:
-                badges.append(("👑", f"{subject} マスター", f"{subject}を100時間勉強"))
+                badges.append(("👑", f"{subject} マスター"))
 
     return badges
 
+
+# =====================
+# CSS
+# =====================
 
 st.markdown("""
 <style>
@@ -245,6 +344,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# =====================
+# 初期データ
+# =====================
+
 users = load_users()
 logs = load_logs()
 subjects_df = load_subjects()
@@ -259,6 +362,10 @@ default_subjects_map = {
     "shiori": ["民法", "憲法", "刑法", "民事訴訟法", "刑事訴訟法", "商法", "知的財産法", "その他"],
 }
 
+
+# =====================
+# サイドバー
+# =====================
 
 st.sidebar.title("⚙️ 設定")
 
@@ -286,14 +393,7 @@ edit_weekly_goal = st.sidebar.number_input(
 )
 
 if st.sidebar.button("プロフィールを保存"):
-    users = users[users["user_id"] != user_id]
-    new_user = pd.DataFrame([{
-        "user_id": user_id,
-        "name": edit_name,
-        "weekly_goal": edit_weekly_goal
-    }])
-    users = pd.concat([users, new_user], ignore_index=True)
-    save_csv(users, USER_FILE)
+    upsert_user(user_id, edit_name, edit_weekly_goal)
     st.sidebar.success("保存しました")
     st.rerun()
 
@@ -317,17 +417,16 @@ if st.sidebar.button("科目を追加"):
         if subject_name in user_subjects:
             st.sidebar.warning("その科目は既にあります")
         else:
-            new_row = pd.DataFrame([{
-                "user_id": user_id,
-                "subject": subject_name
-            }])
-            subjects_df = pd.concat([subjects_df, new_row], ignore_index=True)
-            save_csv(subjects_df, SUBJECT_FILE)
+            append_subject(user_id, subject_name)
             st.sidebar.success("科目を追加しました")
             st.rerun()
     else:
         st.sidebar.warning("科目名を入力してください")
 
+
+# =====================
+# データ計算
+# =====================
 
 today = date.today()
 week_start, week_end = get_week_range(today)
@@ -349,6 +448,7 @@ remaining = max(edit_weekly_goal - weekly_total, 0)
 achievement = min((weekly_total / edit_weekly_goal) * 100, 100)
 
 streak = calc_streak(user_logs)
+
 level, progress_in_level, required_for_level, next_level_total = calc_level(total_hours)
 level_progress = progress_in_level / required_for_level
 remaining_for_level = next_level_total - total_hours
@@ -365,6 +465,10 @@ elif achievement >= 70:
 else:
     mission_text = f"📚 今週の残りは {remaining:.1f}h。今日は1.0hを目標にしよう。"
 
+
+# =====================
+# メイン画面
+# =====================
 
 st.markdown(f"""
 <div class="hero">
@@ -441,7 +545,7 @@ st.markdown('<div class="section-title">獲得バッジ</div>', unsafe_allow_htm
 
 if badges:
     badge_html = ""
-    for icon, title, desc in badges:
+    for icon, title in badges:
         badge_html += f'<span class="badge-pill">{icon} {title}</span>'
     st.markdown(badge_html, unsafe_allow_html=True)
 else:
@@ -455,7 +559,6 @@ with st.container():
 
     with st.form("study_form"):
         subject = st.selectbox("科目", user_subjects)
-
         hours = st.number_input("勉強時間", min_value=0.0, value=1.0, step=0.5)
         focus = st.slider("集中度", min_value=0, max_value=100, value=70)
         memo = st.text_area("メモ", placeholder="例：統計の仮説検定を復習した")
@@ -465,17 +568,7 @@ with st.container():
         if submitted:
             old_level, _, _, _ = calc_level(total_hours)
 
-            new_log = pd.DataFrame([{
-                "user_id": user_id,
-                "date": str(today),
-                "subject": subject,
-                "hours": hours,
-                "focus": focus,
-                "memo": memo
-            }])
-
-            logs = pd.concat([logs, new_log], ignore_index=True)
-            save_csv(logs, LOG_FILE)
+            append_log(user_id, today, subject, hours, focus, memo)
 
             new_level, _, _, _ = calc_level(total_hours + hours)
 
@@ -483,7 +576,9 @@ with st.container():
                 st.balloons()
                 st.success(f"🎉 レベルアップ！ Lv.{new_level} になりました！")
             else:
-                st.success("記録しました！ページを再読み込みすると反映されます。")
+                st.success("記録しました！")
+
+            st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -495,7 +590,9 @@ if week_logs.empty:
 else:
     display_logs = week_logs[
         ["date", "subject", "hours", "focus", "memo"]
-    ].sort_values("date", ascending=False)
+    ].copy()
+
+    display_logs = display_logs.sort_values("date", ascending=False)
 
     st.dataframe(display_logs, use_container_width=True)
 
@@ -506,11 +603,20 @@ else:
 
     st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
 
+    # Google Sheetsの行番号を計算するため、logs全体から元indexを保持
+    user_week_logs = logs[logs["user_id"] == user_id].copy()
+    user_week_logs["date_dt"] = pd.to_datetime(user_week_logs["date"]).dt.date
+    user_week_logs = user_week_logs[
+        (user_week_logs["date_dt"] >= week_start) &
+        (user_week_logs["date_dt"] <= week_end)
+    ]
+
     delete_options = []
 
-    for idx, row in display_logs.iterrows():
+    for idx, row in user_week_logs.iterrows():
+        sheet_row = idx + 2
         label = f"{row['date']} | {row['subject']} | {row['hours']}h | 集中{row['focus']}%"
-        delete_options.append((idx, label))
+        delete_options.append((sheet_row, label))
 
     if delete_options:
         selected_delete = st.selectbox(
@@ -520,8 +626,6 @@ else:
         )
 
         if st.button("この記録を削除"):
-            delete_idx = selected_delete[0]
-            logs = logs.drop(delete_idx)
-            save_csv(logs, LOG_FILE)
+            delete_log_by_sheet_row(selected_delete[0])
             st.success("記録を削除しました")
             st.rerun()
