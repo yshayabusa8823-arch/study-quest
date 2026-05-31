@@ -12,6 +12,12 @@ st.set_page_config(
 
 SHEET_NAME = "StudyQuestDB"
 
+if "notice_message" not in st.session_state:
+    st.session_state.notice_message = None
+
+if "notice_type" not in st.session_state:
+    st.session_state.notice_type = "success"
+
 
 @st.cache_resource
 def connect_sheets():
@@ -45,6 +51,7 @@ sessions_sheet = sheets["active_sessions"]
 
 def load_sheet(sheet, columns):
     records = sheet.get_all_records()
+
     if not records:
         return pd.DataFrame(columns=columns)
 
@@ -58,30 +65,56 @@ def load_sheet(sheet, columns):
 
 
 def load_logs():
-    df = load_sheet(logs_sheet, ["user_id", "date", "subject", "hours", "focus", "memo"])
+    df = load_sheet(
+        logs_sheet,
+        ["user_id", "date", "subject", "hours", "focus", "memo"]
+    )
+
     if not df.empty:
         df["hours"] = pd.to_numeric(df["hours"], errors="coerce").fillna(0)
         df["focus"] = pd.to_numeric(df["focus"], errors="coerce").fillna(0)
+
     return df
 
 
 def load_users():
-    df = load_sheet(users_sheet, ["user_id", "name", "weekly_goal"])
+    df = load_sheet(
+        users_sheet,
+        ["user_id", "name", "weekly_goal"]
+    )
+
     if not df.empty:
-        df["weekly_goal"] = pd.to_numeric(df["weekly_goal"], errors="coerce").fillna(25)
+        df["weekly_goal"] = pd.to_numeric(
+            df["weekly_goal"],
+            errors="coerce"
+        ).fillna(25)
+
     return df
 
 
 def load_subjects():
-    return load_sheet(subjects_sheet, ["user_id", "subject"])
+    return load_sheet(
+        subjects_sheet,
+        ["user_id", "subject"]
+    )
 
 
 def load_sessions():
-    return load_sheet(sessions_sheet, ["user_id", "subject", "start_time", "focus", "memo"])
+    return load_sheet(
+        sessions_sheet,
+        ["user_id", "subject", "start_time", "focus", "memo"]
+    )
 
 
 def append_log(user_id, log_date, subject, hours, focus, memo):
-    logs_sheet.append_row([user_id, str(log_date), subject, float(hours), int(focus), memo])
+    logs_sheet.append_row([
+        user_id,
+        str(log_date),
+        subject,
+        float(hours),
+        int(focus),
+        memo
+    ])
 
 
 def append_subject(user_id, subject):
@@ -116,9 +149,16 @@ def upsert_user(user_id, name, weekly_goal):
             break
 
     if target_row:
-        users_sheet.update(f"A{target_row}:C{target_row}", [[user_id, name, float(weekly_goal)]])
+        users_sheet.update(
+            f"A{target_row}:C{target_row}",
+            [[user_id, name, float(weekly_goal)]]
+        )
     else:
-        users_sheet.append_row([user_id, name, float(weekly_goal)])
+        users_sheet.append_row([
+            user_id,
+            name,
+            float(weekly_goal)
+        ])
 
 
 def get_week_range(today):
@@ -131,7 +171,11 @@ def calc_streak(user_logs):
     if user_logs.empty:
         return 0
 
-    dates = sorted(pd.to_datetime(user_logs["date"]).dt.date.unique(), reverse=True)
+    dates = sorted(
+        pd.to_datetime(user_logs["date"]).dt.date.unique(),
+        reverse=True
+    )
+
     current = date.today()
     streak = 0
 
@@ -148,13 +192,14 @@ def calc_level(total_hours):
     current_level_total = (level - 1) * 10
     progress_in_level = total_hours - current_level_total
     required_for_level = next_level_total - current_level_total
+
     return level, progress_in_level, required_for_level, next_level_total
 
 
 def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
     badges = []
 
-    for target, icon, title in [
+    hour_badges = [
         (1, "🌱", "はじめの一歩"),
         (5, "🐣", "助走開始"),
         (10, "📚", "10時間突破"),
@@ -167,11 +212,13 @@ def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
         (300, "💎", "300時間突破"),
         (500, "🚀", "500時間突破"),
         (1000, "🌌", "1000時間の境地"),
-    ]:
+    ]
+
+    for target, icon, title in hour_badges:
         if total_hours >= target:
             badges.append((icon, title))
 
-    for target, icon, title in [
+    streak_badges = [
         (2, "🧩", "2日連続"),
         (3, "🔥", "継続の火"),
         (7, "🗓️", "一週間継続"),
@@ -179,28 +226,61 @@ def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
         (30, "🏯", "習慣化成功"),
         (50, "🦁", "継続王"),
         (100, "👑", "継続皇帝"),
-    ]:
+    ]
+
+    for target, icon, title in streak_badges:
         if streak >= target:
             badges.append((icon, title))
 
     if weekly_total >= weekly_goal:
         badges.append(("🎯", "週間目標達成"))
+
     if weekly_total >= weekly_goal * 1.2:
         badges.append(("🚴", "目標超え"))
+
     if weekly_total >= weekly_goal * 1.5:
         badges.append(("🦅", "大幅達成"))
 
     if not user_logs.empty:
+        log_count = len(user_logs)
+
+        count_badges = [
+            (3, "✍️", "記録初心者"),
+            (10, "📘", "記録習慣"),
+            (30, "📒", "ログ職人"),
+            (50, "🗂️", "記録マスター"),
+            (100, "🧾", "記録の鬼"),
+        ]
+
+        for target, icon, title in count_badges:
+            if log_count >= target:
+                badges.append((icon, title))
+
         if user_logs["focus"].max() >= 90:
             badges.append(("⚡", "集中マスター"))
+
+        if user_logs["focus"].max() >= 100:
+            badges.append(("🧠", "完全集中"))
+
+        high_focus_count = len(user_logs[user_logs["focus"] >= 90])
+
+        if high_focus_count >= 5:
+            badges.append(("🔮", "集中の再現性"))
+
+        if high_focus_count >= 10:
+            badges.append(("🧘", "集中の達人"))
+
         if user_logs["hours"].max() >= 3:
             badges.append(("⏳", "3時間クエスト"))
+
         if user_logs["hours"].max() >= 5:
             badges.append(("🗻", "5時間クエスト"))
+
         if user_logs["hours"].max() >= 8:
             badges.append(("🐉", "限界突破"))
 
         subject_totals = user_logs.groupby("subject")["hours"].sum()
+
         for subject, hours in subject_totals.items():
             if hours >= 10:
                 badges.append(("📖", f"{subject} 10時間"))
@@ -296,7 +376,16 @@ default_users = {
 
 default_subjects_map = {
     "syun": ["線形代数", "統計", "微分積分", "法律", "その他"],
-    "shiori": ["民法", "憲法", "刑法", "民事訴訟法", "刑事訴訟法", "商法", "知的財産法", "その他"],
+    "shiori": [
+        "民法",
+        "憲法",
+        "刑法",
+        "民事訴訟法",
+        "刑事訴訟法",
+        "商法",
+        "知的財産法",
+        "その他"
+    ],
 }
 
 
@@ -305,7 +394,22 @@ st.sidebar.title("⚙️ 設定")
 if st.sidebar.button("🔄 更新"):
     st.rerun()
 
-user_id = st.sidebar.selectbox("ユーザーを選択", ["syun", "shiori"])
+user_options = ["syun", "shiori"]
+
+query_user = st.query_params.get("user", "syun")
+
+if query_user not in user_options:
+    query_user = "syun"
+
+default_index = user_options.index(query_user)
+
+user_id = st.sidebar.selectbox(
+    "ユーザーを選択",
+    user_options,
+    index=default_index
+)
+
+st.query_params["user"] = user_id
 
 user_data = users[users["user_id"] == user_id]
 
@@ -330,14 +434,19 @@ edit_weekly_goal = st.sidebar.number_input(
 
 if st.sidebar.button("プロフィールを保存"):
     upsert_user(user_id, edit_name, edit_weekly_goal)
-    st.sidebar.success("保存しました")
+    st.session_state.notice_message = "プロフィールを保存しました"
+    st.session_state.notice_type = "success"
     st.rerun()
 
 
 default_subjects = default_subjects_map[user_id]
-added_subjects = subjects_df[subjects_df["user_id"] == user_id]["subject"].dropna().astype(str).tolist()
+
+added_subjects = subjects_df[
+    subjects_df["user_id"] == user_id
+]["subject"].dropna().astype(str).tolist()
 
 user_subjects = []
+
 for subject in default_subjects + added_subjects:
     subject = subject.strip()
     if subject and subject not in user_subjects:
@@ -351,11 +460,13 @@ new_subject_sidebar = st.sidebar.text_input("追加したい科目")
 if st.sidebar.button("科目を追加"):
     if new_subject_sidebar.strip():
         subject_name = new_subject_sidebar.strip()
+
         if subject_name in user_subjects:
             st.sidebar.warning("その科目は既にあります")
         else:
             append_subject(user_id, subject_name)
-            st.sidebar.success("科目を追加しました")
+            st.session_state.notice_message = "科目を追加しました"
+            st.session_state.notice_type = "success"
             st.rerun()
     else:
         st.sidebar.warning("科目名を入力してください")
@@ -386,7 +497,13 @@ level, progress_in_level, required_for_level, next_level_total = calc_level(tota
 level_progress = progress_in_level / required_for_level
 remaining_for_level = next_level_total - total_hours
 
-badges = get_badges(total_hours, streak, weekly_total, edit_weekly_goal, user_logs)
+badges = get_badges(
+    total_hours,
+    streak,
+    weekly_total,
+    edit_weekly_goal,
+    user_logs
+)
 
 if remaining == 0:
     mission_text = "🎉 今週の目標達成！今日は復習か軽めの積み上げでOK。"
@@ -405,6 +522,19 @@ st.markdown(f"""
     <p>今日の積み上げが、未来の自分を作る。</p>
 </div>
 """, unsafe_allow_html=True)
+
+if st.session_state.notice_message:
+    if "レベルアップ" in st.session_state.notice_message:
+        st.balloons()
+
+    if st.session_state.notice_type == "success":
+        st.success(st.session_state.notice_message)
+    elif st.session_state.notice_type == "warning":
+        st.warning(st.session_state.notice_message)
+    else:
+        st.info(st.session_state.notice_message)
+
+    st.session_state.notice_message = None
 
 st.markdown(f"""
 <div class="mission-card">
@@ -475,14 +605,11 @@ if badges:
     badge_html = ""
     for icon, title in badges:
         badge_html += f'<span class="badge-pill">{icon} {title}</span>'
+
     st.markdown(badge_html, unsafe_allow_html=True)
 else:
     st.write("まだバッジはありません。まずは1時間勉強してみよう。")
 
-
-# =====================
-# タイマー機能
-# =====================
 
 st.markdown('<div class="section-title">タイマー学習</div>', unsafe_allow_html=True)
 
@@ -490,14 +617,32 @@ active_user_sessions = sessions_df[sessions_df["user_id"] == user_id].copy()
 
 if active_user_sessions.empty:
     with st.form("timer_start_form"):
-        timer_subject = st.selectbox("タイマー科目", user_subjects, key="timer_subject")
-        timer_focus = st.slider("予定集中度", min_value=0, max_value=100, value=70, key="timer_focus")
-        timer_memo = st.text_area("タイマーメモ", placeholder="例：民法の復習を開始", key="timer_memo")
+        timer_subject = st.selectbox(
+            "タイマー科目",
+            user_subjects,
+            key="timer_subject"
+        )
+
+        timer_focus = st.slider(
+            "予定集中度",
+            min_value=0,
+            max_value=100,
+            value=70,
+            key="timer_focus"
+        )
+
+        timer_memo = st.text_area(
+            "タイマーメモ",
+            placeholder="例：民法の復習を開始",
+            key="timer_memo"
+        )
+
         start_submitted = st.form_submit_button("▶️ 勉強開始")
 
         if start_submitted:
             start_session(user_id, timer_subject, timer_focus, timer_memo)
-            st.success("タイマーを開始しました")
+            st.session_state.notice_message = "タイマーを開始しました"
+            st.session_state.notice_type = "success"
             st.rerun()
 
 else:
@@ -539,23 +684,20 @@ else:
                 new_level, _, _, _ = calc_level(total_hours + elapsed_hours)
 
                 if new_level > old_level:
-                    st.balloons()
-                    st.success(f"🎉 レベルアップ！ Lv.{new_level} になりました！")
+                    st.session_state.notice_message = f"🎉 レベルアップ！ Lv.{new_level} になりました！"
                 else:
-                    st.success(f"{elapsed_hours:.2f}時間を記録しました")
+                    st.session_state.notice_message = f"{elapsed_hours:.2f}時間を記録しました"
 
+                st.session_state.notice_type = "success"
                 st.rerun()
 
     with col_cancel:
         if st.button("🗑️ タイマーを取り消す"):
             delete_session_by_sheet_row(sheet_row)
-            st.success("タイマーを取り消しました")
+            st.session_state.notice_message = "タイマーを取り消しました"
+            st.session_state.notice_type = "success"
             st.rerun()
 
-
-# =====================
-# 手動記録
-# =====================
 
 st.markdown('<div class="section-title">手動で記録</div>', unsafe_allow_html=True)
 
@@ -564,25 +706,48 @@ with st.container():
 
     with st.form("study_form"):
         subject = st.selectbox("科目", user_subjects)
-        hours = st.number_input("勉強時間", min_value=0.0, value=1.0, step=0.5)
-        focus = st.slider("集中度", min_value=0, max_value=100, value=70)
-        memo = st.text_area("メモ", placeholder="例：統計の仮説検定を復習した")
+
+        hours = st.number_input(
+            "勉強時間",
+            min_value=0.0,
+            value=1.0,
+            step=0.5
+        )
+
+        focus = st.slider(
+            "集中度",
+            min_value=0,
+            max_value=100,
+            value=70
+        )
+
+        memo = st.text_area(
+            "メモ",
+            placeholder="例：統計の仮説検定を復習した"
+        )
 
         submitted = st.form_submit_button("記録する")
 
         if submitted:
             old_level, _, _, _ = calc_level(total_hours)
 
-            append_log(user_id, today, subject, hours, focus, memo)
+            append_log(
+                user_id,
+                today,
+                subject,
+                hours,
+                focus,
+                memo
+            )
 
             new_level, _, _, _ = calc_level(total_hours + hours)
 
             if new_level > old_level:
-                st.balloons()
-                st.success(f"🎉 レベルアップ！ Lv.{new_level} になりました！")
+                st.session_state.notice_message = f"🎉 レベルアップ！ Lv.{new_level} になりました！"
             else:
-                st.success("記録しました！")
+                st.session_state.notice_message = "記録しました！"
 
+            st.session_state.notice_type = "success"
             st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -593,7 +758,10 @@ st.markdown('<div class="section-title">今週の記録</div>', unsafe_allow_htm
 if week_logs.empty:
     st.write("今週の記録はまだありません。")
 else:
-    display_logs = week_logs[["date", "subject", "hours", "focus", "memo"]].copy()
+    display_logs = week_logs[
+        ["date", "subject", "hours", "focus", "memo"]
+    ].copy()
+
     display_logs = display_logs.sort_values("date", ascending=False)
 
     st.dataframe(display_logs, use_container_width=True)
@@ -601,12 +769,21 @@ else:
     st.markdown('<div class="section-title">科目別勉強時間</div>', unsafe_allow_html=True)
 
     subject_summary = week_logs.groupby("subject")["hours"].sum().reset_index()
-    st.bar_chart(subject_summary, x="subject", y="hours")
+
+    st.bar_chart(
+        subject_summary,
+        x="subject",
+        y="hours"
+    )
 
     st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
 
     user_week_logs = logs[logs["user_id"] == user_id].copy()
-    user_week_logs["date_dt"] = pd.to_datetime(user_week_logs["date"]).dt.date
+
+    user_week_logs["date_dt"] = pd.to_datetime(
+        user_week_logs["date"]
+    ).dt.date
+
     user_week_logs = user_week_logs[
         (user_week_logs["date_dt"] >= week_start) &
         (user_week_logs["date_dt"] <= week_end)
@@ -616,7 +793,13 @@ else:
 
     for idx, row in user_week_logs.iterrows():
         sheet_row = idx + 2
-        label = f"{row['date']} | {row['subject']} | {row['hours']}h | 集中{row['focus']}%"
+        label = (
+            f"{row['date']} | "
+            f"{row['subject']} | "
+            f"{row['hours']}h | "
+            f"集中{row['focus']}%"
+        )
+
         delete_options.append((sheet_row, label))
 
     if delete_options:
@@ -628,5 +811,6 @@ else:
 
         if st.button("この記録を削除"):
             delete_log_by_sheet_row(selected_delete[0])
-            st.success("記録を削除しました")
+            st.session_state.notice_message = "記録を削除しました"
+            st.session_state.notice_type = "success"
             st.rerun()
