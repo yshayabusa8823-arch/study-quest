@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 st.set_page_config(
     page_title="Study Quest",
@@ -125,7 +126,7 @@ def start_session(user_id, subject, focus, memo):
     sessions_sheet.append_row([
         user_id,
         subject,
-        datetime.now().isoformat(timespec="seconds"),
+        datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="seconds"),
         int(focus),
         memo
     ])
@@ -176,15 +177,19 @@ def calc_streak(user_logs):
         reverse=True
     )
 
-    current = date.today()
+    today = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+
+    if today not in dates:
+        today = today - timedelta(days=1)
+
     streak = 0
+    current = today
 
     while current in dates:
         streak += 1
         current -= timedelta(days=1)
 
     return streak
-
 
 def calc_level(total_hours):
     level = int(total_hours // 10) + 1
@@ -472,7 +477,7 @@ if st.sidebar.button("科目を追加"):
         st.sidebar.warning("科目名を入力してください")
 
 
-today = date.today()
+today = datetime.now(ZoneInfo("Asia/Tokyo")).date()
 week_start, week_end = get_week_range(today)
 
 user_logs = logs[logs["user_id"] == user_id].copy()
@@ -651,7 +656,12 @@ else:
     sheet_row = session_index + 2
 
     start_time = datetime.fromisoformat(str(session_row["start_time"]))
-    elapsed = datetime.now() - start_time
+
+# 古いデータなどでタイムゾーン情報がない場合は、日本時間として扱う
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=ZoneInfo("Asia/Tokyo"))
+
+    elapsed = datetime.now(ZoneInfo("Asia/Tokyo")) - start_time
     elapsed_minutes = int(elapsed.total_seconds() // 60)
     elapsed_hours = round(elapsed.total_seconds() / 3600, 2)
 
