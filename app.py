@@ -12,6 +12,7 @@ st.set_page_config(
 )
 
 SHEET_NAME = "StudyQuestDB"
+JST = ZoneInfo("Asia/Tokyo")
 
 if "notice_message" not in st.session_state:
     st.session_state.notice_message = None
@@ -126,7 +127,7 @@ def start_session(user_id, subject, focus, memo):
     sessions_sheet.append_row([
         user_id,
         subject,
-        datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="seconds"),
+        datetime.now(JST).isoformat(timespec="seconds"),
         int(focus),
         memo
     ])
@@ -177,19 +178,20 @@ def calc_streak(user_logs):
         reverse=True
     )
 
-    today = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    today_jst = datetime.now(JST).date()
 
-    if today not in dates:
-        today = today - timedelta(days=1)
+    if today_jst not in dates:
+        today_jst = today_jst - timedelta(days=1)
 
     streak = 0
-    current = today
+    current = today_jst
 
     while current in dates:
         streak += 1
         current -= timedelta(days=1)
 
     return streak
+
 
 def calc_level(total_hours):
     level = int(total_hours // 10) + 1
@@ -201,8 +203,17 @@ def calc_level(total_hours):
     return level, progress_in_level, required_for_level, next_level_total
 
 
-def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
-    badges = []
+def badge(icon, title, earned, note):
+    return {
+        "icon": icon,
+        "title": title,
+        "earned": earned,
+        "note": note
+    }
+
+
+def get_badge_status(total_hours, streak, weekly_total, weekly_goal, user_logs):
+    all_badges = []
 
     hour_badges = [
         (1, "🌱", "はじめの一歩"),
@@ -220,8 +231,10 @@ def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
     ]
 
     for target, icon, title in hour_badges:
-        if total_hours >= target:
-            badges.append((icon, title))
+        earned = total_hours >= target
+        remain = max(target - total_hours, 0)
+        note = "獲得済み" if earned else f"あと {remain:.1f}h"
+        all_badges.append(badge(icon, title, earned, note))
 
     streak_badges = [
         (2, "🧩", "2日連続"),
@@ -234,69 +247,92 @@ def get_badges(total_hours, streak, weekly_total, weekly_goal, user_logs):
     ]
 
     for target, icon, title in streak_badges:
-        if streak >= target:
-            badges.append((icon, title))
+        earned = streak >= target
+        remain = max(target - streak, 0)
+        note = "獲得済み" if earned else f"あと {remain}日"
+        all_badges.append(badge(icon, title, earned, note))
 
-    if weekly_total >= weekly_goal:
-        badges.append(("🎯", "週間目標達成"))
+    weekly_badges = [
+        (1.0, "🎯", "週間目標達成"),
+        (1.2, "🚴", "目標超え"),
+        (1.5, "🦅", "大幅達成"),
+    ]
 
-    if weekly_total >= weekly_goal * 1.2:
-        badges.append(("🚴", "目標超え"))
+    for rate, icon, title in weekly_badges:
+        target = weekly_goal * rate
+        earned = weekly_total >= target
+        remain = max(target - weekly_total, 0)
+        note = "獲得済み" if earned else f"あと {remain:.1f}h"
+        all_badges.append(badge(icon, title, earned, note))
 
-    if weekly_total >= weekly_goal * 1.5:
-        badges.append(("🦅", "大幅達成"))
-
-    if not user_logs.empty:
+    if user_logs.empty:
+        log_count = 0
+        max_focus = 0
+        high_focus_count = 0
+        max_hours = 0
+        subject_totals = pd.Series(dtype=float)
+    else:
         log_count = len(user_logs)
-
-        count_badges = [
-            (3, "✍️", "記録初心者"),
-            (10, "📘", "記録習慣"),
-            (30, "📒", "ログ職人"),
-            (50, "🗂️", "記録マスター"),
-            (100, "🧾", "記録の鬼"),
-        ]
-
-        for target, icon, title in count_badges:
-            if log_count >= target:
-                badges.append((icon, title))
-
-        if user_logs["focus"].max() >= 90:
-            badges.append(("⚡", "集中マスター"))
-
-        if user_logs["focus"].max() >= 100:
-            badges.append(("🧠", "完全集中"))
-
+        max_focus = user_logs["focus"].max()
         high_focus_count = len(user_logs[user_logs["focus"] >= 90])
-
-        if high_focus_count >= 5:
-            badges.append(("🔮", "集中の再現性"))
-
-        if high_focus_count >= 10:
-            badges.append(("🧘", "集中の達人"))
-
-        if user_logs["hours"].max() >= 3:
-            badges.append(("⏳", "3時間クエスト"))
-
-        if user_logs["hours"].max() >= 5:
-            badges.append(("🗻", "5時間クエスト"))
-
-        if user_logs["hours"].max() >= 8:
-            badges.append(("🐉", "限界突破"))
-
+        max_hours = user_logs["hours"].max()
         subject_totals = user_logs.groupby("subject")["hours"].sum()
 
-        for subject, hours in subject_totals.items():
-            if hours >= 10:
-                badges.append(("📖", f"{subject} 10時間"))
-            if hours >= 30:
-                badges.append(("🎓", f"{subject} 30時間"))
-            if hours >= 50:
-                badges.append(("🏅", f"{subject} 50時間"))
-            if hours >= 100:
-                badges.append(("👑", f"{subject} マスター"))
+    count_badges = [
+        (3, "✍️", "記録初心者"),
+        (10, "📘", "記録習慣"),
+        (30, "📒", "ログ職人"),
+        (50, "🗂️", "記録マスター"),
+        (100, "🧾", "記録の鬼"),
+    ]
 
-    return badges
+    for target, icon, title in count_badges:
+        earned = log_count >= target
+        remain = max(target - log_count, 0)
+        note = "獲得済み" if earned else f"あと {remain}回"
+        all_badges.append(badge(icon, title, earned, note))
+
+    focus_badges = [
+        (max_focus >= 90, "⚡", "集中マスター", "集中度90以上"),
+        (max_focus >= 100, "🧠", "完全集中", "集中度100"),
+        (high_focus_count >= 5, "🔮", "集中の再現性", f"あと {max(5 - high_focus_count, 0)}回"),
+        (high_focus_count >= 10, "🧘", "集中の達人", f"あと {max(10 - high_focus_count, 0)}回"),
+    ]
+
+    for earned, icon, title, locked_note in focus_badges:
+        note = "獲得済み" if earned else locked_note
+        all_badges.append(badge(icon, title, earned, note))
+
+    long_badges = [
+        (3, "⏳", "3時間クエスト"),
+        (5, "🗻", "5時間クエスト"),
+        (8, "🐉", "限界突破"),
+    ]
+
+    for target, icon, title in long_badges:
+        earned = max_hours >= target
+        remain = max(target - max_hours, 0)
+        note = "獲得済み" if earned else f"1回であと {remain:.1f}h"
+        all_badges.append(badge(icon, title, earned, note))
+
+    for subject, hours in subject_totals.items():
+        subject_badges = [
+            (10, "📖", f"{subject} 10時間"),
+            (30, "🎓", f"{subject} 30時間"),
+            (50, "🏅", f"{subject} 50時間"),
+            (100, "👑", f"{subject} マスター"),
+        ]
+
+        for target, icon, title in subject_badges:
+            earned = hours >= target
+            remain = max(target - hours, 0)
+            note = "獲得済み" if earned else f"あと {remain:.1f}h"
+            all_badges.append(badge(icon, title, earned, note))
+
+    earned_badges = [b for b in all_badges if b["earned"]]
+    locked_badges = [b for b in all_badges if not b["earned"]]
+
+    return earned_badges, locked_badges
 
 
 st.markdown("""
@@ -358,6 +394,23 @@ st.markdown("""
     margin: 5px 4px;
     font-weight: 700;
     font-size: 14px;
+}
+.locked-badge-pill {
+    display: inline-block;
+    background: #f8fafc;
+    color: #94a3b8;
+    border: 1px dashed #cbd5e1;
+    padding: 10px 14px;
+    border-radius: 999px;
+    margin: 5px 4px;
+    font-weight: 700;
+    font-size: 14px;
+    opacity: 0.58;
+}
+.locked-note {
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
 }
 .section-title {
     font-size: 28px;
@@ -477,7 +530,7 @@ if st.sidebar.button("科目を追加"):
         st.sidebar.warning("科目名を入力してください")
 
 
-today = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+today = datetime.now(JST).date()
 week_start, week_end = get_week_range(today)
 
 user_logs = logs[logs["user_id"] == user_id].copy()
@@ -502,7 +555,7 @@ level, progress_in_level, required_for_level, next_level_total = calc_level(tota
 level_progress = progress_in_level / required_for_level
 remaining_for_level = next_level_total - total_hours
 
-badges = get_badges(
+earned_badges, locked_badges = get_badge_status(
     total_hours,
     streak,
     weekly_total,
@@ -606,14 +659,31 @@ st.write(f"あと {remaining_for_level:.1f} 時間で Lv.{level + 1}")
 
 st.markdown('<div class="section-title">獲得バッジ</div>', unsafe_allow_html=True)
 
-if badges:
+if earned_badges:
     badge_html = ""
-    for icon, title in badges:
-        badge_html += f'<span class="badge-pill">{icon} {title}</span>'
+    for b in earned_badges:
+        badge_html += f'<span class="badge-pill">{b["icon"]} {b["title"]}</span>'
 
     st.markdown(badge_html, unsafe_allow_html=True)
 else:
     st.write("まだバッジはありません。まずは1時間勉強してみよう。")
+
+
+st.markdown('<div class="section-title">未獲得バッジ</div>', unsafe_allow_html=True)
+
+if locked_badges:
+    locked_html = ""
+    for b in locked_badges:
+        locked_html += (
+            f'<span class="locked-badge-pill">'
+            f'🔒 {b["icon"]} {b["title"]}'
+            f'<span class="locked-note">({b["note"]})</span>'
+            f'</span>'
+        )
+
+    st.markdown(locked_html, unsafe_allow_html=True)
+else:
+    st.success("全バッジ獲得済み！すごすぎる。")
 
 
 st.markdown('<div class="section-title">タイマー学習</div>', unsafe_allow_html=True)
@@ -657,11 +727,10 @@ else:
 
     start_time = datetime.fromisoformat(str(session_row["start_time"]))
 
-# 古いデータなどでタイムゾーン情報がない場合は、日本時間として扱う
     if start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=ZoneInfo("Asia/Tokyo"))
+        start_time = start_time.replace(tzinfo=JST)
 
-    elapsed = datetime.now(ZoneInfo("Asia/Tokyo")) - start_time
+    elapsed = datetime.now(JST) - start_time
     elapsed_minutes = int(elapsed.total_seconds() // 60)
     elapsed_hours = round(elapsed.total_seconds() / 3600, 2)
 
@@ -682,7 +751,7 @@ else:
 
                 append_log(
                     user_id,
-                    date.today(),
+                    datetime.now(JST).date(),
                     session_row["subject"],
                     elapsed_hours,
                     int(session_row["focus"]),
