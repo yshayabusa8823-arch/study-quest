@@ -51,7 +51,9 @@ subjects_sheet = sheets["subjects"]
 sessions_sheet = sheets["active_sessions"]
 
 
-def load_sheet(sheet, columns):
+@st.cache_data(ttl=60)
+def load_sheet_cached(sheet_name, columns):
+    sheet = sheets[sheet_name]
     records = sheet.get_all_records()
 
     if not records:
@@ -67,21 +69,28 @@ def load_sheet(sheet, columns):
 
 
 def load_logs():
-    df = load_sheet(
-        logs_sheet,
+    df = load_sheet_cached(
+        "logs",
         ["user_id", "date", "subject", "hours", "focus", "memo"]
     )
-
     if not df.empty:
         df["hours"] = pd.to_numeric(df["hours"], errors="coerce").fillna(0)
         df["focus"] = pd.to_numeric(df["focus"], errors="coerce").fillna(0)
-
     return df
 
+def load_logs():
+    df = load_sheet_cached(
+        "logs",
+        ["user_id", "date", "subject", "hours", "focus", "memo"]
+    )
+    if not df.empty:
+        df["hours"] = pd.to_numeric(df["hours"], errors="coerce").fillna(0)
+        df["focus"] = pd.to_numeric(df["focus"], errors="coerce").fillna(0)
+    return df
 
 def load_users():
-    df = load_sheet(
-        users_sheet,
+    df = load_sheet_cached(
+        "users",
         ["user_id", "name", "weekly_goal"]
     )
 
@@ -95,18 +104,17 @@ def load_users():
 
 
 def load_subjects():
-    return load_sheet(
-        subjects_sheet,
+    return load_sheet_cached(
+        "subjects",
         ["user_id", "subject"]
     )
 
 
 def load_sessions():
-    return load_sheet(
-        sessions_sheet,
+    return load_sheet_cached(
+        "active_sessions",
         ["user_id", "subject", "start_time", "focus", "memo"]
     )
-
 
 def append_log(user_id, log_date, subject, hours, focus, memo):
     logs_sheet.append_row([
@@ -337,67 +345,89 @@ def get_badge_status(total_hours, streak, weekly_total, weekly_goal, user_logs):
 
 st.markdown("""
 <style>
+.stApp {
+    background:
+        radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 34%),
+        radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 30%),
+        linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+}
+
 .block-container {
     padding-top: 1rem;
     padding-left: 1rem;
     padding-right: 1rem;
     max-width: 760px;
 }
+
 .hero {
-    background: linear-gradient(135deg, #111827, #4f46e5, #ec4899);
-    padding: 26px;
-    border-radius: 30px;
+    background:
+        linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,64,175,0.94)),
+        radial-gradient(circle at top right, rgba(34,211,238,0.75), transparent 35%);
+    padding: 28px;
+    border-radius: 32px;
     color: white;
     margin-bottom: 20px;
-    box-shadow: 0 18px 40px rgba(79,70,229,0.25);
+    box-shadow: 0 20px 50px rgba(15,23,42,0.24);
+    border: 1px solid rgba(255,255,255,0.18);
 }
-.hero h1 {
-    font-size: 42px;
-    line-height: 1.05;
-    margin-bottom: 14px;
-}
-.hero h3 {
-    font-size: 24px;
-    line-height: 1.3;
-}
+
 .mission-card {
-    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    background: linear-gradient(135deg, #ecfeff, #eff6ff);
     padding: 20px;
-    border-radius: 24px;
-    border: 1px solid #fed7aa;
+    border-radius: 26px;
+    border: 1px solid #bae6fd;
     margin-bottom: 18px;
     font-size: 18px;
+    box-shadow: 0 10px 30px rgba(14,165,233,0.12);
 }
-.stat-card, .quest-card {
-    background: white;
+
+.stat-card {
+    background: rgba(255,255,255,0.86);
     padding: 18px;
-    border-radius: 24px;
-    box-shadow: 0 10px 28px rgba(15,23,42,0.08);
-    border: 1px solid #eef2f7;
+    border-radius: 26px;
+    box-shadow: 0 12px 30px rgba(15,23,42,0.08);
+    border: 1px solid rgba(186,230,253,0.9);
     margin-bottom: 12px;
+    backdrop-filter: blur(10px);
 }
+
 .stat-label {
-    color: #64748b;
+    color: #0369a1;
     font-size: 14px;
+    font-weight: 700;
     margin-bottom: 6px;
 }
+
 .stat-number {
-    color: #111827;
+    color: #0f172a;
     font-size: 32px;
-    font-weight: 900;
+    font-weight: 950;
 }
+
+.quest-card {
+    background: rgba(255,255,255,0.9);
+    padding: 20px;
+    border-radius: 28px;
+    box-shadow: 0 14px 34px rgba(15,23,42,0.10);
+    border: 1px solid rgba(186,230,253,0.9);
+    margin-bottom: 18px;
+}
+
 .badge-pill {
     display: inline-block;
-    background: #f1f5f9;
+    background: linear-gradient(135deg, #e0f2fe, #eef2ff);
+    color: #0f172a;
     padding: 10px 14px;
     border-radius: 999px;
     margin: 5px 4px;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 14px;
+    border: 1px solid #bae6fd;
 }
+
 .locked-badge-pill {
     display: inline-block;
-    background: #f8fafc;
+    background: rgba(255,255,255,0.55);
     color: #94a3b8;
     border: 1px dashed #cbd5e1;
     padding: 10px 14px;
@@ -405,22 +435,18 @@ st.markdown("""
     margin: 5px 4px;
     font-weight: 700;
     font-size: 14px;
-    opacity: 0.58;
+    opacity: 0.62;
 }
-.locked-note {
-    font-size: 11px;
-    font-weight: 600;
-    margin-left: 4px;
-}
+
 .section-title {
-    font-size: 28px;
-    font-weight: 900;
+    font-size: 27px;
+    font-weight: 950;
+    color: #0f172a;
     margin-top: 24px;
     margin-bottom: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
-
 
 users = load_users()
 logs = load_logs()
@@ -450,6 +476,7 @@ default_subjects_map = {
 st.sidebar.title("⚙️ 設定")
 
 if st.sidebar.button("🔄 更新"):
+    st.cache_data.clear()
     st.rerun()
 
 user_options = ["syun", "shiori"]
@@ -492,6 +519,9 @@ edit_weekly_goal = st.sidebar.number_input(
 
 if st.sidebar.button("プロフィールを保存"):
     upsert_user(user_id, edit_name, edit_weekly_goal)
+
+    st.cache_data.clear()
+
     st.session_state.notice_message = "プロフィールを保存しました"
     st.session_state.notice_type = "success"
     st.rerun()
@@ -523,6 +553,9 @@ if st.sidebar.button("科目を追加"):
             st.sidebar.warning("その科目は既にあります")
         else:
             append_subject(user_id, subject_name)
+
+            st.cache_data.clear()
+
             st.session_state.notice_message = "科目を追加しました"
             st.session_state.notice_type = "success"
             st.rerun()
@@ -546,6 +579,12 @@ else:
 
 weekly_total = week_logs["hours"].sum() if not week_logs.empty else 0
 total_hours = user_logs["hours"].sum() if not user_logs.empty else 0
+if not user_logs.empty:
+    today_logs = user_logs[user_logs["date_dt"] == today]
+else:
+    today_logs = pd.DataFrame()
+
+today_total = today_logs["hours"].sum() if not today_logs.empty else 0
 remaining = max(edit_weekly_goal - weekly_total, 0)
 achievement = min((weekly_total / edit_weekly_goal) * 100, 100)
 
@@ -607,16 +646,16 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown(f"""
     <div class="stat-card">
-        <div class="stat-label">今週</div>
-        <div class="stat-number">{weekly_total:.1f}h</div>
+        <div class="stat-label">今日</div>
+        <div class="stat-number">{today_total:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
     st.markdown(f"""
     <div class="stat-card">
-        <div class="stat-label">残り</div>
-        <div class="stat-number">{remaining:.1f}h</div>
+        <div class="stat-label">今週</div>
+        <div class="stat-number">{weekly_total:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -625,16 +664,34 @@ col3, col4 = st.columns(2)
 with col3:
     st.markdown(f"""
     <div class="stat-card">
-        <div class="stat-label">連続</div>
-        <div class="stat-number">{streak}日</div>
+        <div class="stat-label">残り</div>
+        <div class="stat-number">{remaining:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col4:
     st.markdown(f"""
     <div class="stat-card">
+        <div class="stat-label">連続</div>
+        <div class="stat-number">{streak}日</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+col5, col6 = st.columns(2)
+
+with col5:
+    st.markdown(f"""
+    <div class="stat-card">
         <div class="stat-label">レベル</div>
         <div class="stat-number">Lv.{level}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col6:
+    st.markdown(f"""
+    <div class="stat-card">
+        <div class="stat-label">総勉強時間</div>
+        <div class="stat-number">{total_hours:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -716,6 +773,9 @@ if active_user_sessions.empty:
 
         if start_submitted:
             start_session(user_id, timer_subject, timer_focus, timer_memo)
+
+            st.cache_data.clear()
+
             st.session_state.notice_message = "タイマーを開始しました"
             st.session_state.notice_type = "success"
             st.rerun()
@@ -760,6 +820,8 @@ else:
 
                 delete_session_by_sheet_row(sheet_row)
 
+                st.cache_data.clear()
+
                 new_level, _, _, _ = calc_level(total_hours + elapsed_hours)
 
                 if new_level > old_level:
@@ -773,6 +835,9 @@ else:
     with col_cancel:
         if st.button("🗑️ タイマーを取り消す"):
             delete_session_by_sheet_row(sheet_row)
+
+            st.cache_data.clear()
+
             st.session_state.notice_message = "タイマーを取り消しました"
             st.session_state.notice_type = "success"
             st.rerun()
@@ -818,6 +883,8 @@ with st.container():
                 focus,
                 memo
             )
+
+            st.cache_data.clear()
 
             new_level, _, _, _ = calc_level(total_hours + hours)
 
@@ -890,6 +957,9 @@ else:
 
         if st.button("この記録を削除"):
             delete_log_by_sheet_row(selected_delete[0])
+
+            st.cache_data.clear()
+
             st.session_state.notice_message = "記録を削除しました"
             st.session_state.notice_type = "success"
             st.rerun()
