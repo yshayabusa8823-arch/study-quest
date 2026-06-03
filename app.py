@@ -432,14 +432,6 @@ st.markdown("""
     opacity: 0.9;
 }
 
-.hero::after {
-    content: "✏️ ✨";
-    position: absolute;
-    right: 118px;
-    bottom: 32px;
-    font-size: 32px;
-    opacity: 0.75;
-}
 
 .hero h1 {
     font-size: 44px;
@@ -474,14 +466,6 @@ st.markdown("""
     backdrop-filter: blur(12px);
 }
 
-.mission-card::after {
-    content: "🌱";
-    position: absolute;
-    right: 26px;
-    top: 20px;
-    font-size: 42px;
-    opacity: 0.78;
-}
 
 .stat-card {
     background: rgba(255,255,255,0.86);
