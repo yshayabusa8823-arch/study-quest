@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+
 st.set_page_config(
     page_title="Study Quest",
     page_icon="icon.png",
@@ -21,6 +22,9 @@ if "notice_type" not in st.session_state:
     st.session_state.notice_type = "success"
 
 
+# =====================
+# Google Sheets 接続
+# =====================
 @st.cache_resource
 def connect_sheets():
     scope = [
@@ -51,6 +55,9 @@ subjects_sheet = sheets["subjects"]
 sessions_sheet = sheets["active_sessions"]
 
 
+# =====================
+# データ読み込み
+# =====================
 @st.cache_data(ttl=60)
 def load_sheet_cached(sheet_name, columns):
     sheet = sheets[sheet_name]
@@ -73,20 +80,13 @@ def load_logs():
         "logs",
         ["user_id", "date", "subject", "hours", "focus", "memo"]
     )
+
     if not df.empty:
         df["hours"] = pd.to_numeric(df["hours"], errors="coerce").fillna(0)
         df["focus"] = pd.to_numeric(df["focus"], errors="coerce").fillna(0)
+
     return df
 
-def load_logs():
-    df = load_sheet_cached(
-        "logs",
-        ["user_id", "date", "subject", "hours", "focus", "memo"]
-    )
-    if not df.empty:
-        df["hours"] = pd.to_numeric(df["hours"], errors="coerce").fillna(0)
-        df["focus"] = pd.to_numeric(df["focus"], errors="coerce").fillna(0)
-    return df
 
 def load_users():
     df = load_sheet_cached(
@@ -116,6 +116,10 @@ def load_sessions():
         ["user_id", "subject", "start_time", "focus", "memo"]
     )
 
+
+# =====================
+# Google Sheets 書き込み
+# =====================
 def append_log(user_id, log_date, subject, hours, focus, memo):
     logs_sheet.append_row([
         user_id,
@@ -171,6 +175,9 @@ def upsert_user(user_id, name, weekly_goal):
         ])
 
 
+# =====================
+# 計算関数
+# =====================
 def get_week_range(today):
     start = today - timedelta(days=today.weekday())
     end = start + timedelta(days=6)
@@ -343,111 +350,337 @@ def get_badge_status(total_hours, streak, weekly_total, weekly_goal, user_logs):
     return earned_badges, locked_badges
 
 
+# =====================
+# CSS
+# =====================
 st.markdown("""
 <style>
 .stApp {
     background:
-        radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 34%),
-        radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 30%),
-        linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+        radial-gradient(circle at 12% 8%, rgba(191, 219, 254, 0.75), transparent 28%),
+        radial-gradient(circle at 88% 10%, rgba(224, 242, 254, 0.95), transparent 32%),
+        radial-gradient(circle at 50% 95%, rgba(219, 234, 254, 0.85), transparent 34%),
+
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.65) 0px, rgba(255,255,255,0) 2px),
+        radial-gradient(circle at 80% 22%, rgba(255,255,255,0.55) 0px, rgba(255,255,255,0) 2px),
+        radial-gradient(circle at 60% 72%, rgba(255,255,255,0.45) 0px, rgba(255,255,255,0) 2px),
+        radial-gradient(circle at 32% 82%, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0) 2px),
+
+        linear-gradient(
+            135deg,
+            rgba(255,255,255,0.10) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255,255,255,0.06) 50%,
+            rgba(255,255,255,0.06) 75%,
+            transparent 75%,
+            transparent
+        ),
+
+        linear-gradient(
+            180deg,
+            #eef8ff 0%,
+            #e8f3ff 45%,
+            #f7fbff 100%
+        );
+
+    background-size:
+        auto,
+        auto,
+        auto,
+
+        180px 180px,
+        240px 240px,
+        220px 220px,
+        260px 260px,
+
+        120px 120px,
+
+        auto;
+
+    background-attachment: fixed;
 }
 
 .block-container {
-    padding-top: 1rem;
+    padding-top: 0.6rem;
     padding-left: 1rem;
     padding-right: 1rem;
-    max-width: 760px;
+    max-width: 860px;
 }
 
 .hero {
+    position: relative;
+    overflow: hidden;
     background:
-        linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,64,175,0.94)),
-        radial-gradient(circle at top right, rgba(34,211,238,0.75), transparent 35%);
-    padding: 28px;
-    border-radius: 32px;
-    color: white;
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.72), transparent 22%),
+        radial-gradient(circle at 20% 90%, rgba(186,230,253,0.85), transparent 32%),
+        linear-gradient(135deg, #dff3ff 0%, #c9e7ff 45%, #b9d8ff 100%);
+    padding: 30px;
+    border-radius: 34px;
+    color: #12305f;
     margin-bottom: 20px;
-    box-shadow: 0 20px 50px rgba(15,23,42,0.24);
-    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 18px 45px rgba(59,130,246,0.16);
+    border: 1px solid rgba(255,255,255,0.8);
+}
+
+.hero::before {
+    content: "📚";
+    position: absolute;
+    right: 42px;
+    top: 42px;
+    font-size: 72px;
+    opacity: 0.9;
+}
+
+.hero::after {
+    content: "✏️ ✨";
+    position: absolute;
+    right: 118px;
+    bottom: 32px;
+    font-size: 32px;
+    opacity: 0.75;
+}
+
+.hero h1 {
+    font-size: 44px;
+    line-height: 0.95;
+    margin-bottom: 14px;
+    font-weight: 950;
+    color: #1d4ed8;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.85);
+}
+
+.hero h3 {
+    margin-top: 0;
+    font-weight: 900;
+    color: #1e3a8a;
+}
+
+.hero p {
+    color: #475569;
+    font-weight: 750;
 }
 
 .mission-card {
-    background: linear-gradient(135deg, #ecfeff, #eff6ff);
-    padding: 20px;
-    border-radius: 26px;
-    border: 1px solid #bae6fd;
+    position: relative;
+    overflow: hidden;
+    background: rgba(255,255,255,0.78);
+    padding: 22px;
+    border-radius: 30px;
+    border: 1px solid rgba(186,230,253,0.95);
     margin-bottom: 18px;
-    font-size: 18px;
-    box-shadow: 0 10px 30px rgba(14,165,233,0.12);
+    font-size: 17px;
+    box-shadow: 0 14px 32px rgba(59,130,246,0.10);
+    backdrop-filter: blur(12px);
+}
+
+.mission-card::after {
+    content: "🌱";
+    position: absolute;
+    right: 26px;
+    top: 20px;
+    font-size: 42px;
+    opacity: 0.78;
 }
 
 .stat-card {
     background: rgba(255,255,255,0.86);
-    padding: 18px;
-    border-radius: 26px;
-    box-shadow: 0 12px 30px rgba(15,23,42,0.08);
-    border: 1px solid rgba(186,230,253,0.9);
-    margin-bottom: 12px;
-    backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 28px;
+    box-shadow: 0 14px 32px rgba(59,130,246,0.10);
+    border: 1px solid rgba(191,219,254,0.95);
+    margin-bottom: 14px;
+    backdrop-filter: blur(12px);
 }
 
 .stat-label {
-    color: #0369a1;
+    color: #2563eb;
     font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 6px;
+    font-weight: 900;
+    margin-bottom: 12px;
 }
 
 .stat-number {
     color: #0f172a;
-    font-size: 32px;
+    font-size: 31px;
     font-weight: 950;
 }
 
-.quest-card {
-    background: rgba(255,255,255,0.9);
-    padding: 20px;
-    border-radius: 28px;
-    box-shadow: 0 14px 34px rgba(15,23,42,0.10);
-    border: 1px solid rgba(186,230,253,0.9);
-    margin-bottom: 18px;
-}
-
-.badge-pill {
-    display: inline-block;
-    background: linear-gradient(135deg, #e0f2fe, #eef2ff);
-    color: #0f172a;
-    padding: 10px 14px;
-    border-radius: 999px;
-    margin: 5px 4px;
-    font-weight: 800;
-    font-size: 14px;
-    border: 1px solid #bae6fd;
-}
-
-.locked-badge-pill {
-    display: inline-block;
-    background: rgba(255,255,255,0.55);
-    color: #94a3b8;
-    border: 1px dashed #cbd5e1;
-    padding: 10px 14px;
-    border-radius: 999px;
-    margin: 5px 4px;
-    font-weight: 700;
-    font-size: 14px;
-    opacity: 0.62;
+.progress-card,
+.quest-card,
+.study-rank-card,
+.record-card {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid rgba(219,234,254,0.96);
+    box-shadow: 0 14px 34px rgba(59,130,246,0.10);
+    backdrop-filter: blur(12px);
 }
 
 .section-title {
     font-size: 27px;
     font-weight: 950;
+    color: #1e3a8a;
+    margin-top: 28px;
+    margin-bottom: 14px;
+}
+
+.badge-pill {
+    display: inline-block;
+    background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+    color: #1e3a8a;
+    padding: 10px 14px;
+    border-radius: 999px;
+    margin: 5px 4px;
+    font-weight: 850;
+    font-size: 14px;
+    border: 1px solid #bfdbfe;
+}
+
+.locked-badge-pill {
+    display: inline-block;
+    background: rgba(255,255,255,0.62);
+    color: #94a3b8;
+    border: 1px dashed #cbd5e1;
+    padding: 10px 14px;
+    border-radius: 999px;
+    margin: 5px 4px;
+    font-weight: 750;
+    font-size: 14px;
+    opacity: 0.72;
+}
+
+.record-card {
+    border-radius: 24px;
+    padding: 17px 18px;
+    margin-bottom: 13px;
+}
+
+.record-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.record-subject {
+    font-size: 18px;
+    font-weight: 950;
+    color: #1e3a8a;
+}
+
+.record-date {
+    font-size: 13px;
+    font-weight: 750;
+    color: #64748b;
+}
+
+.record-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.record-chip {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+    padding: 7px 11px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.study-rank-card {
+    border-radius: 26px;
+    padding: 18px;
+    margin-bottom: 14px;
+}
+
+.rank-row {
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.rank-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #dbeafe, #eff6ff);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 19px;
+    font-weight: 950;
+    color: #2563eb;
+}
+
+.rank-title {
+    font-size: 18px;
+    font-weight: 950;
     color: #0f172a;
-    margin-top: 24px;
-    margin-bottom: 12px;
+}
+
+.rank-sub {
+    font-size: 13px;
+    font-weight: 750;
+    color: #64748b;
+    margin-top: 3px;
+}
+
+.rank-value {
+    font-size: 24px;
+    font-weight: 950;
+    color: #2563eb;
+}
+
+.focus-good {
+    color: #16a34a;
+}
+
+.focus-mid {
+    color: #ca8a04;
+}
+
+.focus-low {
+    color: #dc2626;
+}
+
+button[kind="primary"], .stButton > button {
+    border-radius: 999px;
+    border: 1px solid rgba(147,197,253,0.9);
+    background: linear-gradient(135deg, #60a5fa, #818cf8);
+    color: white;
+    font-weight: 850;
+    box-shadow: 0 10px 24px rgba(59,130,246,0.22);
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 999px;
+    padding: 8px 14px;
+    background: rgba(255,255,255,0.58);
+    border: 1px solid rgba(219,234,254,0.9);
+}
+            
+.stat-card:hover,
+.record-card:hover,
+.study-rank-card:hover {
+    transform: translateY(-4px);
+    transition: 0.2s ease;
+    box-shadow: 0 18px 38px rgba(59,130,246,0.16);
 }
 </style>
 """, unsafe_allow_html=True)
 
+
+# =====================
+# 初期データ
+# =====================
 users = load_users()
 logs = load_logs()
 subjects_df = load_subjects()
@@ -473,6 +706,9 @@ default_subjects_map = {
 }
 
 
+# =====================
+# サイドバー
+# =====================
 st.sidebar.title("⚙️ 設定")
 
 if st.sidebar.button("🔄 更新"):
@@ -480,7 +716,6 @@ if st.sidebar.button("🔄 更新"):
     st.rerun()
 
 user_options = ["syun", "shiori"]
-
 query_user = st.query_params.get("user", "syun")
 
 if query_user not in user_options:
@@ -519,13 +754,10 @@ edit_weekly_goal = st.sidebar.number_input(
 
 if st.sidebar.button("プロフィールを保存"):
     upsert_user(user_id, edit_name, edit_weekly_goal)
-
     st.cache_data.clear()
-
     st.session_state.notice_message = "プロフィールを保存しました"
     st.session_state.notice_type = "success"
     st.rerun()
-
 
 default_subjects = default_subjects_map[user_id]
 
@@ -553,9 +785,7 @@ if st.sidebar.button("科目を追加"):
             st.sidebar.warning("その科目は既にあります")
         else:
             append_subject(user_id, subject_name)
-
             st.cache_data.clear()
-
             st.session_state.notice_message = "科目を追加しました"
             st.session_state.notice_type = "success"
             st.rerun()
@@ -563,6 +793,9 @@ if st.sidebar.button("科目を追加"):
         st.sidebar.warning("科目名を入力してください")
 
 
+# =====================
+# 集計
+# =====================
 today = datetime.now(JST).date()
 week_start, week_end = get_week_range(today)
 
@@ -579,6 +812,7 @@ else:
 
 weekly_total = week_logs["hours"].sum() if not week_logs.empty else 0
 total_hours = user_logs["hours"].sum() if not user_logs.empty else 0
+
 if not user_logs.empty:
     today_logs = user_logs[user_logs["date_dt"] == today]
 else:
@@ -612,6 +846,9 @@ else:
     mission_text = f"📚 今週の残りは {remaining:.1f}h。今日は1.0hを目標にしよう。"
 
 
+# =====================
+# ヘッダー
+# =====================
 st.markdown(f"""
 <div class="hero">
     <h1>🧭 Study<br>Quest</h1>
@@ -641,6 +878,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
+# =====================
+# ダッシュボードカード
+# =====================
 col1, col2 = st.columns(2)
 
 with col1:
@@ -664,7 +904,7 @@ col3, col4 = st.columns(2)
 with col3:
     st.markdown(f"""
     <div class="stat-card">
-        <div class="stat-label">残り</div>
+        <div class="stat-label">目標まで残り</div>
         <div class="stat-number">{remaining:.1f}h</div>
     </div>
     """, unsafe_allow_html=True)
@@ -672,7 +912,7 @@ with col3:
 with col4:
     st.markdown(f"""
     <div class="stat-card">
-        <div class="stat-label">連続</div>
+        <div class="stat-label">連続記録</div>
         <div class="stat-number">{streak}日</div>
     </div>
     """, unsafe_allow_html=True)
@@ -695,157 +935,166 @@ with col6:
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown(f"""
-<div class="stat-card">
-    <div class="stat-label">総勉強時間</div>
-    <div class="stat-number">{total_hours:.1f}h</div>
-</div>
-""", unsafe_allow_html=True)
 
-
+# =====================
+# 進捗
+# =====================
 st.markdown('<div class="section-title">進捗</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="progress-card">', unsafe_allow_html=True)
 
 st.write("今週の達成率")
 st.progress(achievement / 100)
-st.write(f"{achievement:.1f}% 達成")
+st.write(f"{achievement:.1f}% 達成 / 目標 {edit_weekly_goal:.1f}h")
 
 st.write("レベル進捗")
 st.progress(level_progress)
 st.write(f"あと {remaining_for_level:.1f} 時間で Lv.{level + 1}")
 
-
-st.markdown('<div class="section-title">獲得バッジ</div>', unsafe_allow_html=True)
-
-if earned_badges:
-    badge_html = ""
-    for b in earned_badges:
-        badge_html += f'<span class="badge-pill">{b["icon"]} {b["title"]}</span>'
-
-    st.markdown(badge_html, unsafe_allow_html=True)
-else:
-    st.write("まだバッジはありません。まずは1時間勉強してみよう。")
+st.markdown('</div>', unsafe_allow_html=True)
 
 
-st.markdown('<div class="section-title">未獲得バッジ</div>', unsafe_allow_html=True)
+# =====================
+# バッジ
+# =====================
+st.markdown('<div class="section-title">バッジ</div>', unsafe_allow_html=True)
 
-if locked_badges:
-    locked_html = ""
-    for b in locked_badges:
-        locked_html += (
-            f'<span class="locked-badge-pill">'
-            f'🔒 {b["icon"]} {b["title"]}'
-            f'<span class="locked-note">({b["note"]})</span>'
-            f'</span>'
-        )
+with st.expander(f"🏅 獲得バッジを見る：{len(earned_badges)}個", expanded=True):
+    if earned_badges:
+        badge_html = ""
+        for b in earned_badges:
+            badge_html += f'<span class="badge-pill">{b["icon"]} {b["title"]}</span>'
 
-    st.markdown(locked_html, unsafe_allow_html=True)
-else:
-    st.success("全バッジ獲得済み！すごすぎる。")
+        st.markdown(badge_html, unsafe_allow_html=True)
+    else:
+        st.write("まだバッジはありません。まずは1時間勉強してみよう。")
+
+with st.expander(f"🔒 未獲得バッジを見る：{len(locked_badges)}個", expanded=False):
+    if locked_badges:
+        locked_html = ""
+        for b in locked_badges:
+            locked_html += (
+                f'<span class="locked-badge-pill">'
+                f'🔒 {b["icon"]} {b["title"]}'
+                f'<span class="locked-note">({b["note"]})</span>'
+                f'</span>'
+            )
+
+        st.markdown(locked_html, unsafe_allow_html=True)
+    else:
+        st.success("全バッジ獲得済み！すごすぎる。")
 
 
-st.markdown('<div class="section-title">タイマー学習</div>', unsafe_allow_html=True)
+# =====================
+# 記録エリア
+# =====================
+st.markdown('<div class="section-title">勉強を記録する</div>', unsafe_allow_html=True)
 
-active_user_sessions = sessions_df[sessions_df["user_id"] == user_id].copy()
+tab_timer, tab_manual = st.tabs(["⏱️ タイマー学習", "✍️ 手動で記録"])
 
-if active_user_sessions.empty:
-    with st.form("timer_start_form"):
-        timer_subject = st.selectbox(
-            "タイマー科目",
-            user_subjects,
-            key="timer_subject"
-        )
+with tab_timer:
+    active_user_sessions = sessions_df[sessions_df["user_id"] == user_id].copy()
 
-        timer_focus = st.slider(
-            "予定集中度",
-            min_value=0,
-            max_value=100,
-            value=70,
-            key="timer_focus"
-        )
+    if active_user_sessions.empty:
+        st.markdown('<div class="quest-card">', unsafe_allow_html=True)
 
-        timer_memo = st.text_area(
-            "タイマーメモ",
-            placeholder="例：民法の復習を開始",
-            key="timer_memo"
-        )
+        with st.form("timer_start_form"):
+            timer_subject = st.selectbox(
+                "タイマー科目",
+                user_subjects,
+                key="timer_subject"
+            )
 
-        start_submitted = st.form_submit_button("▶️ 勉強開始")
+            timer_focus = st.slider(
+                "予定集中度",
+                min_value=0,
+                max_value=100,
+                value=70,
+                key="timer_focus"
+            )
 
-        if start_submitted:
-            start_session(user_id, timer_subject, timer_focus, timer_memo)
+            timer_memo = st.text_area(
+                "タイマーメモ",
+                placeholder="例：民法の復習を開始",
+                key="timer_memo"
+            )
 
-            st.cache_data.clear()
+            start_submitted = st.form_submit_button("▶️ 勉強開始")
 
-            st.session_state.notice_message = "タイマーを開始しました"
-            st.session_state.notice_type = "success"
-            st.rerun()
-
-else:
-    session_row = active_user_sessions.iloc[0]
-    session_index = active_user_sessions.index[0]
-    sheet_row = session_index + 2
-
-    start_time = datetime.fromisoformat(str(session_row["start_time"]))
-
-    if start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=JST)
-
-    elapsed = datetime.now(JST) - start_time
-    elapsed_minutes = int(elapsed.total_seconds() // 60)
-    elapsed_hours = round(elapsed.total_seconds() / 3600, 2)
-
-    st.info(
-        f"⏱️ 勉強中：{session_row['subject']} / "
-        f"開始 {start_time.strftime('%H:%M')} / "
-        f"経過 約{elapsed_minutes}分"
-    )
-
-    col_end, col_cancel = st.columns(2)
-
-    with col_end:
-        if st.button("⏹️ 終了して記録"):
-            if elapsed_hours <= 0:
-                st.warning("記録できる時間が短すぎます")
-            else:
-                old_level, _, _, _ = calc_level(total_hours)
-
-                append_log(
-                    user_id,
-                    datetime.now(JST).date(),
-                    session_row["subject"],
-                    elapsed_hours,
-                    int(session_row["focus"]),
-                    session_row["memo"]
-                )
-
-                delete_session_by_sheet_row(sheet_row)
-
+            if start_submitted:
+                start_session(user_id, timer_subject, timer_focus, timer_memo)
                 st.cache_data.clear()
-
-                new_level, _, _, _ = calc_level(total_hours + elapsed_hours)
-
-                if new_level > old_level:
-                    st.session_state.notice_message = f"🎉 レベルアップ！ Lv.{new_level} になりました！"
-                else:
-                    st.session_state.notice_message = f"{elapsed_hours:.2f}時間を記録しました"
-
+                st.session_state.notice_message = "タイマーを開始しました"
                 st.session_state.notice_type = "success"
                 st.rerun()
 
-    with col_cancel:
-        if st.button("🗑️ タイマーを取り消す"):
-            delete_session_by_sheet_row(sheet_row)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-            st.cache_data.clear()
+    else:
+        session_row = active_user_sessions.iloc[0]
+        session_index = active_user_sessions.index[0]
+        sheet_row = session_index + 2
 
-            st.session_state.notice_message = "タイマーを取り消しました"
-            st.session_state.notice_type = "success"
-            st.rerun()
+        start_time = datetime.fromisoformat(str(session_row["start_time"]))
+
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=JST)
+
+        elapsed = datetime.now(JST) - start_time
+        elapsed_minutes = int(elapsed.total_seconds() // 60)
+        elapsed_hours = round(elapsed.total_seconds() / 3600, 2)
+
+        st.markdown(f"""
+        <div class="timer-active">
+            <b>⏱️ 勉強中</b><br>
+            科目：{session_row['subject']}<br>
+            開始：{start_time.strftime('%H:%M')}<br>
+            経過：約{elapsed_minutes}分
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_end, col_cancel = st.columns(2)
+
+        with col_end:
+            if st.button("⏹️ 終了して記録"):
+                if elapsed_hours <= 0:
+                    st.warning("記録できる時間が短すぎます")
+                else:
+                    old_level, _, _, _ = calc_level(total_hours)
+
+                    append_log(
+                        user_id,
+                        datetime.now(JST).date(),
+                        session_row["subject"],
+                        elapsed_hours,
+                        int(session_row["focus"]),
+                        session_row["memo"]
+                    )
+
+                    delete_session_by_sheet_row(sheet_row)
+
+                    st.cache_data.clear()
+
+                    new_level, _, _, _ = calc_level(total_hours + elapsed_hours)
+
+                    if new_level > old_level:
+                        st.session_state.notice_message = f"🎉 レベルアップ！ Lv.{new_level} になりました！"
+                    else:
+                        st.session_state.notice_message = f"{elapsed_hours:.2f}時間を記録しました"
+
+                    st.session_state.notice_type = "success"
+                    st.rerun()
+
+        with col_cancel:
+            if st.button("🗑️ タイマーを取り消す"):
+                delete_session_by_sheet_row(sheet_row)
+                st.cache_data.clear()
+                st.session_state.notice_message = "タイマーを取り消しました"
+                st.session_state.notice_type = "success"
+                st.rerun()
 
 
-st.markdown('<div class="section-title">手動で記録</div>', unsafe_allow_html=True)
-
-with st.container():
+with tab_manual:
     st.markdown('<div class="quest-card">', unsafe_allow_html=True)
 
     with st.form("study_form"):
@@ -873,93 +1122,206 @@ with st.container():
         submitted = st.form_submit_button("記録する")
 
         if submitted:
-            old_level, _, _, _ = calc_level(total_hours)
-
-            append_log(
-                user_id,
-                today,
-                subject,
-                hours,
-                focus,
-                memo
-            )
-
-            st.cache_data.clear()
-
-            new_level, _, _, _ = calc_level(total_hours + hours)
-
-            if new_level > old_level:
-                st.session_state.notice_message = f"🎉 レベルアップ！ Lv.{new_level} になりました！"
+            if hours <= 0:
+                st.warning("勉強時間を入力してください")
             else:
-                st.session_state.notice_message = "記録しました！"
+                old_level, _, _, _ = calc_level(total_hours)
 
-            st.session_state.notice_type = "success"
-            st.rerun()
+                append_log(
+                    user_id,
+                    today,
+                    subject,
+                    hours,
+                    focus,
+                    memo
+                )
+
+                st.cache_data.clear()
+
+                new_level, _, _, _ = calc_level(total_hours + hours)
+
+                if new_level > old_level:
+                    st.session_state.notice_message = f"🎉 レベルアップ！ Lv.{new_level} になりました！"
+                else:
+                    st.session_state.notice_message = "記録しました！"
+
+                st.session_state.notice_type = "success"
+                st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+# =====================
+# 今週の記録
+# =====================
+# =====================
+# 今週の記録
+# =====================
 st.markdown('<div class="section-title">今週の記録</div>', unsafe_allow_html=True)
 
-if week_logs.empty:
-    st.write("今週の記録はまだありません。")
-else:
-    display_logs = week_logs[
-        ["date", "subject", "hours", "focus", "memo"]
-    ].copy()
+tab_log, tab_subject, tab_focus, tab_delete = st.tabs([
+    "📋 記録",
+    "📚 科目別",
+    "🎯 集中度",
+    "🗑️ 削除"
+])
 
-    display_logs = display_logs.sort_values("date", ascending=False)
+with tab_log:
+    if week_logs.empty:
+        st.write("今週の記録はまだありません。")
+    else:
+        display_logs = week_logs[
+            ["date", "subject", "hours", "focus", "memo"]
+        ].copy()
 
-    st.dataframe(display_logs, use_container_width=True)
+        display_logs = display_logs.sort_values("date", ascending=False)
 
-    st.markdown('<div class="section-title">科目別勉強時間</div>', unsafe_allow_html=True)
+        for _, row in display_logs.iterrows():
+            memo_text = str(row["memo"]).strip()
+            if memo_text == "" or memo_text == "nan":
+                memo_text = "メモなし"
 
-    subject_summary = week_logs.groupby("subject")["hours"].sum().reset_index()
+            st.markdown(f"""
+            <div class="record-card">
+                <div class="record-top">
+                    <div class="record-subject">{row["subject"]}</div>
+                    <div class="record-date">{row["date"]}</div>
+                </div>
+                <div class="record-meta">
+                    <span class="record-chip">⏱️ {float(row["hours"]):.2f}h</span>
+                    <span class="record-chip">🎯 集中 {int(float(row["focus"]))}%</span>
+                    <span class="record-chip">📝 {memo_text}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.bar_chart(
-        subject_summary,
-        x="subject",
-        y="hours"
-    )
 
-    st.markdown('<div class="section-title">記録を削除</div>', unsafe_allow_html=True)
-
-    user_week_logs = logs[logs["user_id"] == user_id].copy()
-
-    user_week_logs["date_dt"] = pd.to_datetime(
-        user_week_logs["date"]
-    ).dt.date
-
-    user_week_logs = user_week_logs[
-        (user_week_logs["date_dt"] >= week_start) &
-        (user_week_logs["date_dt"] <= week_end)
-    ]
-
-    delete_options = []
-
-    for idx, row in user_week_logs.iterrows():
-        sheet_row = idx + 2
-        label = (
-            f"{row['date']} | "
-            f"{row['subject']} | "
-            f"{row['hours']}h | "
-            f"集中{row['focus']}%"
+with tab_subject:
+    if week_logs.empty:
+        st.write("科目別に表示できる記録がまだありません。")
+    else:
+        subject_summary = (
+            week_logs
+            .groupby("subject")["hours"]
+            .sum()
+            .reset_index()
+            .sort_values("hours", ascending=False)
         )
 
-        delete_options.append((sheet_row, label))
+        total_week_hours = subject_summary["hours"].sum()
 
-    if delete_options:
-        selected_delete = st.selectbox(
-            "削除する記録を選択",
-            delete_options,
-            format_func=lambda x: x[1]
+        st.caption("※ 進捗バーではなく、今週の勉強時間ランキングとして表示しています。")
+
+        for rank, (_, row) in enumerate(subject_summary.iterrows(), start=1):
+            subject_name = row["subject"]
+            hours_value = float(row["hours"])
+            share = 0 if total_week_hours == 0 else hours_value / total_week_hours * 100
+
+            if rank == 1:
+                icon = "🥇"
+            elif rank == 2:
+                icon = "🥈"
+            elif rank == 3:
+                icon = "🥉"
+            else:
+                icon = f"{rank}"
+
+            st.markdown(f"""
+            <div class="study-rank-card">
+                <div class="rank-row">
+                    <div class="rank-badge">{icon}</div>
+                    <div>
+                        <div class="rank-title">{subject_name}</div>
+                        <div class="rank-sub">今週の割合：{share:.1f}%</div>
+                    </div>
+                    <div class="rank-value">{hours_value:.1f}h</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+with tab_focus:
+    if week_logs.empty:
+        st.write("集中度を表示できる記録がまだありません。")
+    else:
+        focus_summary = (
+            week_logs
+            .groupby("subject")["focus"]
+            .mean()
+            .reset_index()
+            .sort_values("focus", ascending=False)
         )
 
-        if st.button("この記録を削除"):
-            delete_log_by_sheet_row(selected_delete[0])
+        st.caption("※ 科目ごとの平均集中度です。")
 
-            st.cache_data.clear()
+        for rank, (_, row) in enumerate(focus_summary.iterrows(), start=1):
+            subject_name = row["subject"]
+            focus_value = float(row["focus"])
 
-            st.session_state.notice_message = "記録を削除しました"
-            st.session_state.notice_type = "success"
-            st.rerun()
+            if focus_value >= 80:
+                comment = "かなり集中できてる"
+                focus_class = "focus-good"
+            elif focus_value >= 60:
+                comment = "安定している"
+                focus_class = "focus-mid"
+            else:
+                comment = "少し疲れ気味かも"
+                focus_class = "focus-low"
+
+            st.markdown(f"""
+            <div class="study-rank-card">
+                <div class="rank-row">
+                    <div class="rank-badge">🎯</div>
+                    <div>
+                        <div class="rank-title">{subject_name}</div>
+                        <div class="rank-sub">{comment}</div>
+                    </div>
+                    <div class="rank-value {focus_class}">{focus_value:.1f}%</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+with tab_delete:
+    if week_logs.empty:
+        st.write("削除できる今週の記録はありません。")
+    else:
+        user_week_logs = logs[logs["user_id"] == user_id].copy()
+
+        user_week_logs["date_dt"] = pd.to_datetime(
+            user_week_logs["date"]
+        ).dt.date
+
+        user_week_logs = user_week_logs[
+            (user_week_logs["date_dt"] >= week_start) &
+            (user_week_logs["date_dt"] <= week_end)
+        ]
+
+        delete_options = []
+
+        for idx, row in user_week_logs.iterrows():
+            sheet_row = idx + 2
+            label = (
+                f"{row['date']} | "
+                f"{row['subject']} | "
+                f"{row['hours']}h | "
+                f"集中{row['focus']}%"
+            )
+
+            delete_options.append((sheet_row, label))
+
+        if delete_options:
+            selected_delete = st.selectbox(
+                "削除する記録を選択",
+                delete_options,
+                format_func=lambda x: x[1]
+            )
+
+            if st.button("この記録を削除"):
+                delete_log_by_sheet_row(selected_delete[0])
+
+                st.cache_data.clear()
+
+                st.session_state.notice_message = "記録を削除しました"
+                st.session_state.notice_type = "success"
+                st.rerun()
