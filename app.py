@@ -1176,11 +1176,11 @@ balance_summary = make_balance_summary(
 # =====================
 # ヘッダー
 # =====================
-st.markdown(f"""
-<div class="hero">
-    <h1>🧭 Study<br>Quest</h1>
-    <h3>{edit_name} の学習ダッシュボード</h3>
-    <p>今日の積み上げが、未来の自分を作る。</p>
+st.markdown("""
+<div class="hero-card">
+    <div class="hero-title">
+        🧭 Study Quest
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
