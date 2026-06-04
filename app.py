@@ -859,7 +859,24 @@ button[kind="primary"], .stButton > button {
         #6366f1
     ) !important;
 }
-            
+
+.hero-logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.hero-compass {
+    font-size: 4.5rem;
+}
+
+.hero-logo-text {
+    font-size: 4rem;
+    font-weight: 950;
+    line-height: 0.95;
+    color: #2563eb;
+    text-shadow: 0 4px 12px rgba(37,99,235,0.15);
+}            
 </style>
 """, unsafe_allow_html=True)
 
@@ -1176,13 +1193,17 @@ balance_summary = make_balance_summary(
 # =====================
 # ヘッダー
 # =====================
-st.markdown("""
-<div class="hero-card">
-    <div class="hero-title">
-        🧭 Study Quest
-    </div>
+st.markdown(
+    """
+<div class="hero">
+<div class="hero-logo-wrap">
+<div class="hero-compass">🧭</div>
+<div class="hero-logo-text">Study<br>Quest</div>
 </div>
-""", unsafe_allow_html=True)
+</div>
+""",
+    unsafe_allow_html=True
+)
 
 if st.session_state.notice_message:
     if "レベルアップ" in st.session_state.notice_message:
