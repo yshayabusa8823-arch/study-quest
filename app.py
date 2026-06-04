@@ -91,8 +91,34 @@ def load_logs():
 def load_users():
     df = load_sheet_cached(
         "users",
-        ["user_id", "name", "weekly_goal"]
+        [
+            "user_id",
+            "name",
+            "weekly_goal",
+            "programming_ratio",
+            "math_ratio",
+            "statistics_ratio",
+            "english_ratio",
+            "other_ratio"
+        ]
     )
+
+    numeric_cols = [
+        "weekly_goal",
+        "programming_ratio",
+        "math_ratio",
+        "statistics_ratio",
+        "english_ratio",
+        "other_ratio"
+    ]
+
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        ).fillna(0)
+
+    return df
 
     if not df.empty:
         df["weekly_goal"] = pd.to_numeric(
@@ -153,8 +179,18 @@ def delete_log_by_sheet_row(sheet_row):
     logs_sheet.delete_rows(sheet_row)
 
 
-def upsert_user(user_id, name, weekly_goal):
+def upsert_user(
+    user_id,
+    name,
+    weekly_goal,
+    programming_ratio,
+    math_ratio,
+    statistics_ratio,
+    english_ratio,
+    other_ratio
+):
     users = load_users()
+
     target_row = None
 
     for i, row in users.iterrows():
@@ -162,18 +198,103 @@ def upsert_user(user_id, name, weekly_goal):
             target_row = i + 2
             break
 
+    values = [[
+        user_id,
+        name,
+        float(weekly_goal),
+        int(programming_ratio),
+        int(math_ratio),
+        int(statistics_ratio),
+        int(english_ratio),
+        int(other_ratio)
+    ]]
+
     if target_row:
         users_sheet.update(
-            f"A{target_row}:C{target_row}",
-            [[user_id, name, float(weekly_goal)]]
+            f"A{target_row}:H{target_row}",
+            values
         )
     else:
-        users_sheet.append_row([
-            user_id,
-            name,
-            float(weekly_goal)
-        ])
+        users_sheet.append_row(values[0])
 
+CATEGORY_DEFS = {
+    "programming": {
+        "label": "プログラミング",
+        "icon": "💻",
+        "keywords": ["プログラミング", "Python", "python", "AI", "機械学習", "アプリ"]
+    },
+    "math": {
+        "label": "数学",
+        "icon": "📐",
+        "keywords": ["線形代数", "微分積分", "数学"]
+    },
+    "statistics": {
+        "label": "統計",
+        "icon": "📊",
+        "keywords": ["統計", "統計学", "データ分析"]
+    },
+    "english": {
+        "label": "英語",
+        "icon": "🇺🇸",
+        "keywords": ["英語", "TOEFL", "TOEIC", "IELTS", "英単語", "リスニング"]
+    },
+    "other": {
+        "label": "その他",
+        "icon": "📚",
+        "keywords": []
+    },
+}
+
+
+def categorize_subject(subject):
+    subject = str(subject)
+
+    for category_key, category in CATEGORY_DEFS.items():
+        if category_key == "other":
+            continue
+
+        for keyword in category["keywords"]:
+            if keyword in subject:
+                return category_key
+
+    return "other"
+
+
+def make_balance_summary(week_logs, weekly_goal, ratios):
+    category_actuals = {
+        key: 0.0 for key in CATEGORY_DEFS.keys()
+    }
+
+    if not week_logs.empty:
+        temp = week_logs.copy()
+        temp["category"] = temp["subject"].apply(categorize_subject)
+
+        grouped = temp.groupby("category")["hours"].sum()
+
+        for category_key, hours in grouped.items():
+            category_actuals[category_key] = float(hours)
+
+    rows = []
+
+    for category_key, category in CATEGORY_DEFS.items():
+        ratio = int(ratios.get(category_key, 0))
+        target = float(weekly_goal) * ratio / 100
+        actual = category_actuals.get(category_key, 0.0)
+        shortage = max(target - actual, 0)
+        achievement = 100 if target == 0 else min(actual / target * 100, 100)
+
+        rows.append({
+            "key": category_key,
+            "label": category["label"],
+            "icon": category["icon"],
+            "ratio": ratio,
+            "target": target,
+            "actual": actual,
+            "shortage": shortage,
+            "achievement": achievement,
+        })
+
+    return rows
 
 # =====================
 # 計算関数
@@ -658,8 +779,90 @@ button[kind="primary"], .stButton > button {
     transition: 0.2s ease;
     box-shadow: 0 18px 38px rgba(59,130,246,0.16);
 }
+            
+.big-progress-card {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(219,234,254,0.96);
+    border-radius: 30px;
+    padding: 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 16px 38px rgba(59,130,246,0.12);
+}
+
+.big-progress-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #2563eb;
+    margin-bottom: 6px;
+}
+
+.big-progress-number {
+    font-size: 42px;
+    font-weight: 950;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
+
+
+            
+.balance-progress-card {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid rgba(219,234,254,0.96);
+    border-radius: 24px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 10px 24px rgba(59,130,246,0.08);
+}
+
+.balance-progress-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: 900;
+    color: #0f172a;
+}
+
+.balance-bar-bg {
+    width: 100%;
+    height: 14px;
+    background: #e5edff;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.balance-bar-fill {
+    height: 14px;
+    border-radius: 999px;
+    background: linear-gradient(
+        90deg,
+        #60a5fa,
+        #818cf8
+    );
+}
+
+.balance-progress-sub {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+
+            
+.stProgress > div > div > div > div {
+    background: linear-gradient(
+        90deg,
+        #2563eb,
+        #3b82f6,
+        #6366f1
+    ) !important;
+}
+            
 </style>
 """, unsafe_allow_html=True)
+
 
 
 # =====================
@@ -718,14 +921,104 @@ st.query_params["user"] = user_id
 user_data = users[users["user_id"] == user_id]
 
 if user_data.empty:
-    name = default_users[user_id]["name"]
-    weekly_goal = default_users[user_id]["weekly_goal"]
+
+    name = "しゅん"
+    weekly_goal = 25
+
+    prog_ratio = 35
+    math_ratio = 25
+    stat_ratio = 20
+    eng_ratio = 15
+    other_ratio = 5
 else:
+
     name = user_data.iloc[0]["name"]
-    weekly_goal = float(user_data.iloc[0]["weekly_goal"])
+
+    weekly_goal = float(
+        user_data.iloc[0]["weekly_goal"]
+    )
+
+    prog_ratio = int(
+        user_data.iloc[0]["programming_ratio"]
+    )
+
+    math_ratio = int(
+        user_data.iloc[0]["math_ratio"]
+    )
+
+    stat_ratio = int(
+        user_data.iloc[0]["statistics_ratio"]
+    )
+
+    eng_ratio = int(
+        user_data.iloc[0]["english_ratio"]
+    )
+
+    other_ratio = int(
+        user_data.iloc[0]["other_ratio"]
+    )
 
 st.sidebar.divider()
 st.sidebar.subheader("プロフィール編集")
+st.sidebar.divider()
+st.sidebar.subheader("🎯 理想配分")
+
+prog_ratio = st.sidebar.number_input(
+    "💻 プログラミング (%)",
+    min_value=0,
+    max_value=100,
+    value=int(prog_ratio),
+    step=5
+)
+
+math_ratio = st.sidebar.number_input(
+    "📐 数学 (%)",
+    min_value=0,
+    max_value=100,
+    value=int(math_ratio),
+    step=5
+)
+
+stat_ratio = st.sidebar.number_input(
+    "📊 統計 (%)",
+    min_value=0,
+    max_value=100,
+    value=int(stat_ratio),
+    step=5
+)
+
+eng_ratio = st.sidebar.number_input(
+    "🇺🇸 英語 (%)",
+    min_value=0,
+    max_value=100,
+    value=int(eng_ratio),
+    step=5
+)
+
+other_ratio = st.sidebar.number_input(
+    "📚 その他 (%)",
+    min_value=0,
+    max_value=100,
+    value=int(other_ratio),
+    step=5
+)
+
+ratio_total = (
+    prog_ratio +
+    math_ratio +
+    stat_ratio +
+    eng_ratio +
+    other_ratio
+)
+
+if ratio_total != 100:
+    st.sidebar.warning(
+        f"現在 {ratio_total}%"
+    )
+else:
+    st.sidebar.success(
+        "100%です"
+    )
 
 edit_name = st.sidebar.text_input("表示名", value=name)
 
@@ -737,7 +1030,16 @@ edit_weekly_goal = st.sidebar.number_input(
 )
 
 if st.sidebar.button("プロフィールを保存"):
-    upsert_user(user_id, edit_name, edit_weekly_goal)
+    upsert_user(
+    user_id,
+    edit_name,
+    edit_weekly_goal,
+    prog_ratio,
+    math_ratio,
+    stat_ratio,
+    eng_ratio,
+    other_ratio
+    )
     st.cache_data.clear()
     st.session_state.notice_message = "プロフィールを保存しました"
     st.session_state.notice_type = "success"
@@ -776,7 +1078,36 @@ if st.sidebar.button("科目を追加"):
     else:
         st.sidebar.warning("科目名を入力してください")
 
+if st.sidebar.button("💾 理想配分を保存"):
 
+    if ratio_total != 100:
+
+        st.sidebar.error(
+            "合計を100%にしてください"
+        )
+
+    else:
+
+        upsert_user(
+            user_id,
+            edit_name,
+            edit_weekly_goal,
+            prog_ratio,
+            math_ratio,
+            stat_ratio,
+            eng_ratio,
+            other_ratio
+        )
+
+        st.cache_data.clear()
+
+        st.session_state.notice_message = (
+            "理想配分を保存しました"
+        )
+
+        st.session_state.notice_type = "success"
+
+        st.rerun()
 # =====================
 # 集計
 # =====================
@@ -829,7 +1160,19 @@ elif achievement >= 70:
 else:
     mission_text = f"📚 今週の残りは {remaining:.1f}h。今日は1.0hを目標にしよう。"
 
+balance_ratios = {
+    "programming": prog_ratio,
+    "math": math_ratio,
+    "statistics": stat_ratio,
+    "english": eng_ratio,
+    "other": other_ratio
+}
 
+balance_summary = make_balance_summary(
+    week_logs,
+    edit_weekly_goal,
+    balance_ratios
+)
 # =====================
 # ヘッダー
 # =====================
@@ -920,23 +1263,82 @@ with col6:
     """, unsafe_allow_html=True)
 
 
+
 # =====================
 # 進捗
 # =====================
 st.markdown('<div class="section-title">進捗</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="progress-card">', unsafe_allow_html=True)
+st.markdown(f"""
+<div class="big-progress-card">
+    <div class="big-progress-title">今週の達成率</div>
+    <div class="big-progress-number">{achievement:.1f}%</div>
+    <div class="balance-bar-bg">
+        <div class="balance-bar-fill" style="width:{achievement}%;"></div>
+    </div>
+    <div class="balance-progress-sub">
+        {weekly_total:.1f}h / 目標 {edit_weekly_goal:.1f}h
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-st.write("今週の達成率")
-st.progress(achievement / 100)
-st.write(f"{achievement:.1f}% 達成 / 目標 {edit_weekly_goal:.1f}h")
 
-st.write("レベル進捗")
-st.progress(level_progress)
-st.write(f"あと {remaining_for_level:.1f} 時間で Lv.{level + 1}")
+st.markdown('<div class="section-title">🎯 科目バランス</div>', unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+priority_rows = sorted(
+    balance_summary,
+    key=lambda x: x["shortage"],
+    reverse=True
+)
 
+for row in priority_rows:
+
+    if row["ratio"] == 0:
+        continue
+
+    st.markdown(
+        f"#### {row['icon']} {row['label']}　{row['achievement']:.0f}%"
+    )
+
+    progress_value = max(
+        min(int(row["achievement"]), 100),
+        0
+    )
+
+    if progress_value > 0:
+        st.progress(progress_value)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.caption(f"現在 {row['actual']:.1f}h")
+
+    with col2:
+        st.caption(f"目標 {row['target']:.1f}h")
+
+    with col3:
+        if row["shortage"] > 0:
+            st.caption(f"残り {row['shortage']:.1f}h")
+        else:
+            st.caption("達成 ✅")
+
+    st.markdown("")
+
+
+st.markdown('<div class="section-title">レベル進捗</div>', unsafe_allow_html=True)
+
+st.markdown(f"""
+<div class="big-progress-card">
+    <div class="big-progress-title">Lv.{level} → Lv.{level + 1}</div>
+    <div class="big-progress-number">{level_progress * 100:.1f}%</div>
+    <div class="balance-bar-bg">
+        <div class="balance-bar-fill" style="width:{level_progress * 100}%;"></div>
+    </div>
+    <div class="balance-progress-sub">
+        あと {remaining_for_level:.1f} 時間で Lv.{level + 1}
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # =====================
 # バッジ
@@ -1135,9 +1537,6 @@ with tab_manual:
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-# =====================
-# 今週の記録
-# =====================
 # =====================
 # 今週の記録
 # =====================
