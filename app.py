@@ -281,7 +281,10 @@ def make_balance_summary(week_logs, weekly_goal, ratios):
         target = float(weekly_goal) * ratio / 100
         actual = category_actuals.get(category_key, 0.0)
         shortage = max(target - actual, 0)
-        achievement = 100 if target == 0 else min(actual / target * 100, 100)
+        achievement = (
+            0 if target == 0
+            else actual / target * 100
+        )
 
         rows.append({
             "key": category_key,
@@ -1310,6 +1313,13 @@ for row in priority_rows:
     if row["ratio"] == 0:
         continue
 
+    title = ""
+
+    if row["achievement"] >= 200:
+        title = " 👑"
+    elif row["achievement"] >= 150:
+        title = " 🚀"
+
     st.markdown(
         f"#### {row['icon']} {row['label']}　{row['achievement']:.0f}%"
     )
@@ -1331,10 +1341,12 @@ for row in priority_rows:
         st.caption(f"目標 {row['target']:.1f}h")
 
     with col3:
-        if row["shortage"] > 0:
-            st.caption(f"残り {row['shortage']:.1f}h")
+        diff = row["actual"] - row["target"]
+
+        if diff >= 0:
+            st.caption(f"超過 +{diff:.1f}h 🚀")
         else:
-            st.caption("達成 ✅")
+            st.caption(f"残り {-diff:.1f}h")
 
     st.markdown("")
 
