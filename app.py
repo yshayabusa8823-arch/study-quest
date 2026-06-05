@@ -544,14 +544,7 @@ st.markdown("""
     border: 1px solid rgba(255,255,255,0.8);
 }
 
-.hero::before {
-    content: "📚";
-    position: absolute;
-    right: 42px;
-    top: 42px;
-    font-size: 72px;
-    opacity: 0.9;
-}
+
 
 
 .hero h1 {
