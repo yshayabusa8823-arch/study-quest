@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import html
 from google.oauth2.service_account import Credentials
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -896,7 +897,48 @@ button[kind="primary"], .stButton > button {
     line-height: 0.95;
     color: #2563eb;
     text-shadow: 0 4px 12px rgba(37,99,235,0.15);
-}            
+}       
+
+.tomorrow-card {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid rgba(219,234,254,0.95);
+    border-radius: 26px;
+    padding: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 12px 28px rgba(59,130,246,0.10);
+}
+
+.tomorrow-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.tomorrow-label {
+    font-size: 13px;
+    font-weight: 900;
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    padding: 6px 10px;
+    border-radius: 999px;
+}
+
+.tomorrow-date {
+    font-size: 12px;
+    font-weight: 800;
+    color: #64748b;
+}
+
+.tomorrow-note {
+    margin-top: 12px;
+    font-size: 18px;
+    font-weight: 850;
+    color: #0f172a;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1774,22 +1816,27 @@ with tab_delete:
                 st.session_state.notice_type = "success"
                 st.rerun()
 
-st.markdown('<div class="section-title">🌙 明日やりたいこと</div>', unsafe_allow_html=True)
+user_tomorrow_notes = tomorrow_notes_df[
+    tomorrow_notes_df["user_id"] == user_id
+].tail(5)
 
-with st.form("tomorrow_note_form"):
-    tomorrow_note = st.text_area(
-        "できたら明日やりたいこと",
-        placeholder="例：統計の復習を30分だけ / 英単語を少し見る"
-    )
+st.markdown("#### 最近のゆるメモ")
 
-    submitted_tomorrow_note = st.form_submit_button("ゆるくメモする")
+if user_tomorrow_notes.empty:
+    st.info("まだメモはありません。")
+else:
+    for _, row in user_tomorrow_notes.iloc[::-1].iterrows():
+        note_text = str(row["note"]).strip()
+        note_date = str(row["date"])
 
-    if submitted_tomorrow_note:
-        if tomorrow_note.strip():
-            append_tomorrow_note(user_id, tomorrow_note.strip())
-            st.cache_data.clear()
-            st.session_state.notice_message = "明日やりたいことをメモしました"
-            st.session_state.notice_type = "success"
-            st.rerun()
-        else:
-            st.warning("内容を入力してね")
+        st.markdown(f"""
+        <div class="tomorrow-card">
+            <div class="tomorrow-card-top">
+                <span class="tomorrow-label">🌙 明日できたら</span>
+                <span class="tomorrow-date">{note_date}</span>
+            </div>
+            <div class="tomorrow-note">
+{note_text}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
