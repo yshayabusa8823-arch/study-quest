@@ -45,7 +45,9 @@ def connect_sheets():
         "users": spreadsheet.worksheet("users"),
         "subjects": spreadsheet.worksheet("subjects"),
         "active_sessions": spreadsheet.worksheet("active_sessions"),
+        "tomorrow_notes": spreadsheet.worksheet("tomorrow_notes"),
     }
+
 
 
 sheets = connect_sheets()
@@ -53,6 +55,7 @@ logs_sheet = sheets["logs"]
 users_sheet = sheets["users"]
 subjects_sheet = sheets["subjects"]
 sessions_sheet = sheets["active_sessions"]
+tomorrow_notes_sheet = sheets["tomorrow_notes"]
 
 
 # =====================
@@ -142,6 +145,12 @@ def load_sessions():
         ["user_id", "subject", "start_time", "focus", "memo"]
     )
 
+def load_tomorrow_notes():
+    return load_sheet_cached(
+        "tomorrow_notes",
+        ["user_id", "date", "note"]
+    )
+
 
 # =====================
 # Google Sheets 書き込み
@@ -161,6 +170,13 @@ def append_subject(user_id, subject):
     subjects_sheet.append_row([user_id, subject])
 
 
+def append_tomorrow_note(user_id, note):
+    tomorrow_notes_sheet.append_row([
+        user_id,
+        str(datetime.now(JST).date()),
+        note
+    ])
+
 def start_session(user_id, subject, focus, memo):
     sessions_sheet.append_row([
         user_id,
@@ -170,6 +186,14 @@ def start_session(user_id, subject, focus, memo):
         memo
     ])
 
+def delete_session_by_sheet_row(sheet_row):
+    sessions_sheet.delete_rows(sheet_row)
+
+def update_session_memo_by_sheet_row(sheet_row, memo):
+    sessions_sheet.update(
+        f"E{sheet_row}",
+        [[memo]]
+    )
 
 def delete_session_by_sheet_row(sheet_row):
     sessions_sheet.delete_rows(sheet_row)
@@ -885,6 +909,7 @@ users = load_users()
 logs = load_logs()
 subjects_df = load_subjects()
 sessions_df = load_sessions()
+tomorrow_notes_df = load_tomorrow_notes()
 
 default_users = {
     "syun": {"name": "しゅん", "weekly_goal": 25.0},
@@ -1465,6 +1490,20 @@ with tab_timer:
         </div>
         """, unsafe_allow_html=True)
 
+        new_timer_memo = st.text_area(
+            "途中メモ",
+            value=str(session_row["memo"]),
+            placeholder="勉強中に気づいたこと・詰まったところを書く",
+            key="active_timer_memo"
+        )
+
+        if st.button("📝 メモを保存"):
+            update_session_memo_by_sheet_row(sheet_row, new_timer_memo)
+            st.cache_data.clear()
+            st.session_state.notice_message = "メモを保存しました"
+            st.session_state.notice_type = "success"
+            st.rerun()
+
         col_end, col_cancel = st.columns(2)
 
         with col_end:
@@ -1734,3 +1773,23 @@ with tab_delete:
                 st.session_state.notice_message = "記録を削除しました"
                 st.session_state.notice_type = "success"
                 st.rerun()
+
+st.markdown('<div class="section-title">🌙 明日やりたいこと</div>', unsafe_allow_html=True)
+
+with st.form("tomorrow_note_form"):
+    tomorrow_note = st.text_area(
+        "できたら明日やりたいこと",
+        placeholder="例：統計の復習を30分だけ / 英単語を少し見る"
+    )
+
+    submitted_tomorrow_note = st.form_submit_button("ゆるくメモする")
+
+    if submitted_tomorrow_note:
+        if tomorrow_note.strip():
+            append_tomorrow_note(user_id, tomorrow_note.strip())
+            st.cache_data.clear()
+            st.session_state.notice_message = "明日やりたいことをメモしました"
+            st.session_state.notice_type = "success"
+            st.rerun()
+        else:
+            st.warning("内容を入力してね")
